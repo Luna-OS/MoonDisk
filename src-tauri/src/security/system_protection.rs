@@ -7,8 +7,6 @@
 //! executor re-derives this immediately before every write; it never
 //! trusts an `is_system_disk` flag handed to it from outside this module.
 
-use std::process::Command;
-
 /// Returns the mount source for `/` on Linux, e.g. `/dev/nvme0n1p2`, or
 /// `None` if `/` isn't backed by a real block device (overlayfs, tmpfs,
 /// containers, …) — in which case there is nothing on this machine for
@@ -42,8 +40,9 @@ pub fn system_disk_source_linux() -> Option<String> {
 /// the immediate parent (the physical volume or LUKS device), not
 /// necessarily a raw disk. Full device-mapper awareness is tracked in
 /// `docs/roadmap.md` (LVM/LUKS are explicit alpha non-goals).
+#[cfg(target_os = "linux")]
 fn resolve_to_parent_disk(partition_path: &str) -> String {
-    let output = Command::new("lsblk")
+    let output = std::process::Command::new("lsblk")
         .args(["-no", "pkname", partition_path])
         .env("LC_ALL", "C")
         .output();
@@ -66,7 +65,7 @@ pub fn system_disk_source_linux() -> Option<String> {
     None
 }
 
-#[cfg(test)]
+#[cfg(all(test, target_os = "linux"))]
 mod tests {
     use super::*;
 
