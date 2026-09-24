@@ -35,10 +35,6 @@ Auswahl falsch ist oder ein Fehler auftritt. Erstelle vor jeder Aktion an
 echten Daten ein Backup. Die Systemplatte ist geschützt, aber MoonDisk
 übernimmt keine Garantie gegen Datenverlust.
 
-## Dokumentation
-
-Ausführliche Architektur- und Sicherheitsdokumentation in [`docs/`](docs/).
-
 ## Lizenz
 
 Diese Repository steht aktuell unter der [MIT-Lizenz](LICENSE). Ein Wechsel
