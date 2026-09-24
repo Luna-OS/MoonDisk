@@ -116,7 +116,7 @@ Serde, Tokio, Vitest, ESLint, Prettier, rustfmt, clippy, GitHub Actions) werden
 
 | Bereich | Wahl | Begründung |
 | ------- | ---- | ---------- |
-| Backend | Rust (stable; MSRV wird in Phase 2 festgelegt) | Speichersicherheit. Das Typsystem kann Sicherheitsgarantien tragen (z. B. existiert kein Schreib-Trait für echte Geräte). Gute Plattform-APIs (`windows`, `wmi`, später `zbus`). |
+| Backend | Rust (stable, MSRV 1.77, siehe `src-tauri/Cargo.toml`) | Speichersicherheit. Das Typsystem kann Sicherheitsgarantien tragen (z. B. existiert kein Schreib-Trait für echte Geräte). Gute Plattform-APIs (`windows`, `wmi`, später `zbus`). |
 | Desktop | **Tauri 2** | Kleine Pakete, nutzt die System-Webview statt eines gebündelten Chromium, IPC über ein feingranulares Capability-/Permission-System, Backend nativ in Rust. |
 | Frontend | React + TypeScript (`strict`) | Weit verbreitet, gute Barrierefreiheits-Bibliotheken, große Contributor-Basis. |
 | Build | Vite | Offizieller Tauri-Weg, schnelle Entwicklung. |

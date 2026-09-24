@@ -1,0 +1,7 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "default",
+  "description": "Phase-2-Grundgerüst: nur Tauri-Core-Standardrechte, keine Plugin-Berechtigungen. Dialog/Clipboard/Opener werden erst in Phase 13/14 ausschließlich aus Rust genutzt (siehe docs/architecture.md §6.2).",
+  "windows": ["main"],
+  "permissions": ["core:default"]
+}

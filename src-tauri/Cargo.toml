@@ -1,0 +1,34 @@
+[package]
+name = "moondisk"
+version = "0.1.0-alpha.1"
+description = "MoonDisk – Deine Laufwerke. Sicher im Mondlicht. Ein lokaler, quelloffener Partitionsmanager."
+authors = ["MoonDisk contributors"]
+license = "GPL-3.0-or-later"
+repository = "https://github.com/Luna-OS/MoonDisk"
+edition = "2021"
+# Minimum supported Rust version. Chosen conservatively for the Tauri 2 /
+# `edition = "2021"` baseline; raised only with a deliberate decision, not
+# incidentally by a new dependency.
+rust-version = "1.77"
+
+[lib]
+# Distinct from the `moondisk` binary target below so the crate can also be
+# built as a cdylib/staticlib for Tauri's mobile targets later, per the
+# standard Tauri 2 project layout.
+name = "moondisk_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2.6.3", features = [] }
+
+[dependencies]
+tauri = { version = "2.11.6", features = [] }
+serde = { version = "1.0.229", features = ["derive"] }
+serde_json = "1.0.151"
+
+[profile.release]
+panic = "abort"
+codegen-units = 1
+lto = true
+opt-level = "s"
+strip = true
