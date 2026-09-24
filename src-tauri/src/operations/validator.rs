@@ -3,15 +3,13 @@
 //! a disk — it only reads the `Disk` snapshot it's given.
 
 use super::OperationRequest;
-use crate::models::{ByteSize, Disk, PartitionFlags, Segment};
+use crate::models::{ByteSize, Disk, Segment};
 use thiserror::Error;
 
 #[derive(Debug, Error, PartialEq, Eq)]
 pub enum ValidationError {
     #[error("Datenträger ist schreibgeschützt")]
     DiskReadOnly,
-    #[error("dies ist der Systemdatenträger, auf dem MoonDisk läuft")]
-    SystemDisk,
     #[error("Partition wurde nicht gefunden")]
     PartitionNotFound,
     #[error("kein ausreichender nicht zugewiesener Speicher an dieser Stelle")]
@@ -20,8 +18,6 @@ pub enum ValidationError {
     Alignment,
     #[error("Größe unterschreitet die Mindestgröße")]
     SizeTooSmall,
-    #[error("die Partition ist geschützt (System-, Boot- oder EFI-Partition)")]
-    ProtectedPartition,
     #[error("dieses Dateisystem unterstützt diese Aktion nicht")]
     FilesystemUnsupported,
     #[error("Label ist ungültig oder zu lang")]
@@ -39,9 +35,6 @@ fn is_aligned(v: ByteSize) -> bool {
 /// exact disk the request targets (callers re-fetch this immediately
 /// before validating — see `docs/safety-model.md` §5.4 on stale plans).
 pub fn validate(disk: &Disk, req: &OperationRequest) -> Result<(), ValidationError> {
-    if disk.is_system_disk {
-        return Err(ValidationError::SystemDisk);
-    }
     if disk.read_only {
         return Err(ValidationError::DiskReadOnly);
     }
@@ -73,12 +66,7 @@ pub fn validate(disk: &Disk, req: &OperationRequest) -> Result<(), ValidationErr
             Ok(())
         }
         OperationRequest::DeletePartition { partition } => {
-            let p = find_partition(disk, partition)?;
-            if p.flags
-                .intersects(PartitionFlags::LOCKED | PartitionFlags::SYSTEM)
-            {
-                return Err(ValidationError::ProtectedPartition);
-            }
+            find_partition(disk, partition)?;
             Ok(())
         }
         OperationRequest::FormatPartition {
@@ -86,12 +74,7 @@ pub fn validate(disk: &Disk, req: &OperationRequest) -> Result<(), ValidationErr
             filesystem,
             label,
         } => {
-            let p = find_partition(disk, partition)?;
-            if p.flags
-                .intersects(PartitionFlags::LOCKED | PartitionFlags::SYSTEM)
-            {
-                return Err(ValidationError::ProtectedPartition);
-            }
+            find_partition(disk, partition)?;
             if !filesystem.can_format() {
                 return Err(ValidationError::FilesystemUnsupported);
             }
@@ -101,10 +84,7 @@ pub fn validate(disk: &Disk, req: &OperationRequest) -> Result<(), ValidationErr
             Ok(())
         }
         OperationRequest::SetLabel { partition, label } => {
-            let p = find_partition(disk, partition)?;
-            if p.flags.contains(PartitionFlags::LOCKED) {
-                return Err(ValidationError::ProtectedPartition);
-            }
+            find_partition(disk, partition)?;
             validate_label(label)
         }
     }
@@ -176,26 +156,16 @@ mod tests {
     }
 
     #[test]
-    fn rejects_everything_on_the_system_disk() {
+    fn allows_deleting_a_system_flagged_partition_on_the_system_disk() {
+        // System/boot/EFI partition protection was removed at the user's
+        // explicit request; `is_system_disk` and `PartitionFlags::SYSTEM |
+        // LOCKED` remain informational only from here on.
         let mut disk = sample_disk();
         disk.is_system_disk = true;
-        let req = OperationRequest::SetLabel {
-            partition: PartitionId::new(&disk.id, 1),
-            label: "x".into(),
-        };
-        assert_eq!(validate(&disk, &req), Err(ValidationError::SystemDisk));
-    }
-
-    #[test]
-    fn rejects_delete_of_a_locked_partition() {
-        let disk = sample_disk();
         let req = OperationRequest::DeletePartition {
             partition: PartitionId::new(&disk.id, 1),
         };
-        assert_eq!(
-            validate(&disk, &req),
-            Err(ValidationError::ProtectedPartition)
-        );
+        assert_eq!(validate(&disk, &req), Ok(()));
     }
 
     #[test]

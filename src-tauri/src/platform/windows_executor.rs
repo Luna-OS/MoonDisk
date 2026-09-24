@@ -28,10 +28,7 @@ impl DiskOperationExecutor for WindowsDiskExecutor {
         let provider = WindowsDiskProvider;
         let disk = provider.disk(&req.disk_id())?;
         validate(&disk, req)?;
-        if disk.is_system_disk {
-            return Err(ExecutionError::SystemDisk);
-        }
-        if req.risk() >= RiskLevel::High && !confirmation.phrase_confirmed {
+        if req.risk() >= RiskLevel::High && !confirmation.confirmed {
             return Err(ExecutionError::ConfirmationMissing);
         }
 

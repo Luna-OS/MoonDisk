@@ -11,29 +11,18 @@ Linux.
 - Datenträger- und Partitionsübersicht (GPT/MBR, NTFS/FAT32/exFAT/ext2-4/
   Btrfs/XFS/Swap)
 - Partition erstellen, löschen, formatieren, Label ändern
-- Sicherheitsdialog mit Bestätigungsphrase für kritische Aktionen
-- Schutz der Systemplatte: MoonDisk erkennt den Datenträger, auf dem das
-  laufende Betriebssystem installiert ist, und blockiert dort jede
-  Schreiboperation
+- Sicherheitsdialog für kritische Aktionen (Löschen/Formatieren)
 
 ## Installation
 
 Fertige Installationspakete für Windows (`.exe`) und Linux (`.deb`/`.rpm`)
 gibt es unter [Releases](https://github.com/Luna-OS/MoonDisk/releases).
 
-## Modi
-
-```text
-MOONDISK_MODE=mock   # Standard: eingebaute Beispiel-Datenträger, keine echten Daten
-MOONDISK_MODE=real   # echte Datenträger, echte Schreiboperationen
-```
-
-**Sicherheitshinweis:** Im `real`-Modus verändert MoonDisk echte
-Datenträger. Verkleinern, Verschieben, Löschen und Formatieren von
-Partitionen kann zu unwiderruflichem Datenverlust führen, wenn die
-Auswahl falsch ist oder ein Fehler auftritt. Erstelle vor jeder Aktion an
-echten Daten ein Backup. Die Systemplatte ist geschützt, aber MoonDisk
-übernimmt keine Garantie gegen Datenverlust.
+**Sicherheitshinweis:** MoonDisk verändert echte Datenträger. Erstellen,
+Löschen, Formatieren und Label-Änderungen von Partitionen können zu
+unwiderruflichem Datenverlust führen, auch auf der System-, Boot- oder
+EFI-Partition, wenn die Auswahl falsch ist oder ein Fehler auftritt.
+Erstelle vor jeder Aktion an echten Daten ein Backup.
 
 ## Lizenz
 

@@ -1,7 +1,7 @@
 {
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "default",
-  "description": "Nur Tauri-Core-Standardrechte, keine Plugin-Berechtigungen. Die App-eigenen Commands (app_info, disks_list, disk_get, execute_operation, siehe src-tauri/src/commands/) sind keine Plugin-Commands und brauchen daher keinen eigenen Permission-Eintrag. Dialog/Clipboard/Opener sind bislang nicht eingebunden und würden, falls ergänzt, ausschließlich aus Rust genutzt (siehe docs/architecture.md §6.2).",
+  "description": "Tauri-Core-Standardrechte plus die Updater-/Process-Plugins für das Auto-Update. Die App-eigenen Commands (app_info, disks_list, disk_get, execute_operation, siehe src-tauri/src/commands/) sind keine Plugin-Commands und brauchen daher keinen eigenen Permission-Eintrag.",
   "windows": ["main"],
-  "permissions": ["core:default"]
+  "permissions": ["core:default", "updater:default", "process:default"]
 }

@@ -20,7 +20,6 @@ use crate::models::{ByteSize, FileSystem};
 use crate::operations::{
     validate, Confirmation, DiskOperationExecutor, ExecutionError, OperationRequest, RiskLevel,
 };
-use crate::security::system_protection::system_disk_source_linux;
 use std::process::{Command, Output};
 
 pub struct LinuxDiskExecutor;
@@ -39,18 +38,8 @@ impl DiskOperationExecutor for LinuxDiskExecutor {
         // 2. Re-validate against that fresh state.
         validate(&disk, req)?;
 
-        // 3. Independent system-disk check, even though `validate` already
-        //    checked `disk.is_system_disk` — this re-derives it from the
-        //    OS right now rather than trusting the field on a struct that
-        //    passed through IPC and Rust code before reaching here.
-        if let Some(system_source) = system_disk_source_linux() {
-            if system_source.starts_with(disk.id.0.as_str()) {
-                return Err(ExecutionError::SystemDisk);
-            }
-        }
-
-        // 4. Confirmation for anything at or above High risk.
-        if req.risk() >= RiskLevel::High && !confirmation.phrase_confirmed {
+        // 3. Confirmation for anything at or above High risk.
+        if req.risk() >= RiskLevel::High && !confirmation.confirmed {
             return Err(ExecutionError::ConfirmationMissing);
         }
 

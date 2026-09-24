@@ -22,8 +22,7 @@ export function getDisk(diskId: string): Promise<Disk> {
 
 export interface ExecuteOperationArgs {
   request: OperationRequest;
-  confirmationPhrase?: string;
-  language: string;
+  confirmed?: boolean;
 }
 
 export interface OperationOutcome {
@@ -33,7 +32,6 @@ export interface OperationOutcome {
 export function executeOperation(args: ExecuteOperationArgs): Promise<OperationOutcome> {
   return invoke("execute_operation", {
     request: args.request,
-    confirmationPhrase: args.confirmationPhrase ?? null,
-    language: args.language,
+    confirmed: args.confirmed ?? false,
   });
 }

@@ -5,8 +5,7 @@ import { operationRisk } from "@/types/models";
 import { formatBytes } from "@/lib/format";
 import { PartitionBar } from "@/components/PartitionBar";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
-
-const LANGUAGE = "de";
+import { UpdateBanner } from "@/components/UpdateBanner";
 
 const FS_OPTIONS: FileSystem[] = ["ntfs", "fat32", "exFat", "ext2", "ext3", "ext4", "btrfs", "xfs"];
 
@@ -71,7 +70,7 @@ export default function App() {
     setBusy(true);
     setStatus(null);
     try {
-      await executeOperation({ request, language: LANGUAGE });
+      await executeOperation({ request });
       setStatus("Operation erfolgreich ausgeführt.");
       await refresh();
     } catch (e) {
@@ -81,15 +80,14 @@ export default function App() {
     }
   }
 
-  async function runCritical(phrase: string) {
+  async function runCritical() {
     if (!pendingCritical) return;
     setBusy(true);
     setConfirmError(null);
     try {
       await executeOperation({
         request: pendingCritical.request,
-        confirmationPhrase: phrase,
-        language: LANGUAGE,
+        confirmed: true,
       });
       setStatus("Operation erfolgreich ausgeführt.");
       setPendingCritical(null);
@@ -131,18 +129,14 @@ export default function App() {
       </header>
 
       <main className="mx-auto flex max-w-4xl flex-col gap-6">
+        <UpdateBanner />
+
         {appInfo && (
           <div
             role="status"
-            className={`rounded-md border px-4 py-2 text-sm ${
-              appInfo.mode === "mock"
-                ? "border-(--md-color-surface-border) text-(--md-color-text-muted)"
-                : "border-(--md-color-warning) text-(--md-color-warning)"
-            }`}
+            className="rounded-md border px-4 py-2 text-sm border-(--md-color-warning) text-(--md-color-warning)"
           >
-            {appInfo.mode === "mock"
-              ? "Mock-Modus aktiv – es werden keine echten Laufwerke verändert."
-              : "Produktionsmodus aktiv – Änderungen wirken auf echte Datenträger. Erstelle vorher ein Backup."}
+            Änderungen wirken auf echte Datenträger. Erstelle vorher ein Backup.
           </div>
         )}
 
@@ -195,7 +189,7 @@ export default function App() {
                   </div>
                   <div className="mt-1 text-xs text-(--md-color-text-muted)">
                     {disk.bus.toUpperCase()} · {disk.table.toUpperCase()}
-                    {disk.isSystemDisk && " · Systemdatenträger (geschützt)"}
+                    {disk.isSystemDisk && " · Systemdatenträger"}
                     {disk.readOnly && " · schreibgeschützt"}
                   </div>
                 </button>
@@ -241,7 +235,6 @@ export default function App() {
                 return (
                   <PartitionActions
                     key={id}
-                    disk={selectedDisk}
                     partition={seg.value}
                     busy={busy}
                     onLabel={(req) => void runDirect(req)}
@@ -260,28 +253,25 @@ export default function App() {
         title={pendingCritical?.title ?? ""}
         consequence={pendingCritical?.consequence ?? ""}
         targetSummary={pendingCritical?.targetSummary ?? ""}
-        language={LANGUAGE}
         busy={busy}
         error={confirmError}
         onCancel={() => {
           setPendingCritical(null);
           setConfirmError(null);
         }}
-        onConfirm={(phrase) => void runCritical(phrase)}
+        onConfirm={() => void runCritical()}
       />
     </div>
   );
 }
 
 function PartitionActions({
-  disk,
   partition,
   busy,
   onLabel,
   onFormat,
   onDelete,
 }: {
-  disk: Disk;
   partition: Extract<Segment, { kind: "partition" }>["value"];
   busy: boolean;
   onLabel: (req: OperationRequest) => void;
@@ -290,12 +280,6 @@ function PartitionActions({
 }) {
   const [label, setLabel] = useState(partition.label ?? "");
   const [formatFs, setFormatFs] = useState<FileSystem>("ext4");
-  const locked = (partition.flags & 0b1000) !== 0; // PartitionFlags.LOCKED
-  const protectedReason = disk.isSystemDisk
-    ? "Systemdatenträger ist geschützt"
-    : locked
-      ? "geschützte System-/Boot-/EFI-Partition"
-      : null;
 
   return (
     <li className="flex flex-col gap-3 rounded-md border border-(--md-color-surface-border) bg-(--md-color-surface) p-4">
@@ -313,7 +297,7 @@ function PartitionActions({
           />
         </label>
         <button
-          disabled={busy || !!protectedReason || label === (partition.label ?? "")}
+          disabled={busy || label === (partition.label ?? "")}
           onClick={() => onLabel({ type: "setLabel", partition: partition.id, label })}
           className="rounded-md border px-3 py-1 text-sm border-(--md-color-surface-border) disabled:opacity-40"
         >
@@ -337,7 +321,7 @@ function PartitionActions({
           </select>
         </label>
         <button
-          disabled={busy || !!protectedReason}
+          disabled={busy}
           onClick={() =>
             onFormat({
               type: "formatPartition",
@@ -351,19 +335,13 @@ function PartitionActions({
           Formatieren …
         </button>
         <button
-          disabled={busy || !!protectedReason}
+          disabled={busy}
           onClick={() => onDelete({ type: "deletePartition", partition: partition.id })}
           className="rounded-md border px-3 py-1 text-sm border-(--md-color-error) text-(--md-color-error) disabled:opacity-40"
         >
           Löschen …
         </button>
       </div>
-
-      {protectedReason && (
-        <p className="text-xs text-(--md-color-text-muted)">
-          Aktionen deaktiviert: {protectedReason}.
-        </p>
-      )}
     </li>
   );
 }

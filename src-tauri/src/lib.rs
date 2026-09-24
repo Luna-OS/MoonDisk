@@ -1,13 +1,8 @@
 //! MoonDisk – Tauri application entry point.
 //!
-//! See `docs/architecture.md` §5 for the module layout and
-//! `docs/safety-model.md` for the safety architecture that still applies
-//! even though MoonDisk performs real disk writes: every write goes
-//! through validation → a confirmation the user must explicitly give →
-//! `operations::DiskOperationExecutor`, and the executor hard-blocks the
-//! disk hosting the running OS before any write happens. See
-//! `commands::Mode` for how mock vs. real mode is selected
-//! (`MOONDISK_MODE=real`; mock is the default).
+//! MoonDisk performs real disk writes against the platform's actual disks.
+//! Every write goes through validation → an explicit confirmation click →
+//! `operations::DiskOperationExecutor`.
 
 pub mod commands;
 pub mod models;
@@ -19,7 +14,18 @@ use commands::AppState;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
-    tauri::Builder::default()
+    let builder = tauri::Builder::default();
+
+    // The updater/process plugins are desktop-only (Tauri has no mobile
+    // update mechanism of its own); MoonDisk itself is desktop-only too,
+    // but the app is scaffolded against the general Tauri 2 mobile-capable
+    // template, so this is guarded the same way the template guards it.
+    #[cfg(desktop)]
+    let builder = builder
+        .plugin(tauri_plugin_updater::Builder::new().build())
+        .plugin(tauri_plugin_process::init());
+
+    builder
         .manage(AppState::new())
         .invoke_handler(tauri::generate_handler![
             commands::app_info,

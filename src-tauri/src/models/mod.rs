@@ -1,9 +1,8 @@
 //! Shared data models for disks, partitions, and filesystems.
 //!
-//! These types are used by every provider (mock and real) and by the
-//! operations planner, so the rest of the app never has to care whether a
-//! `Disk` came from `MockDiskProvider` or from a real Linux/Windows
-//! backend. See `docs/architecture.md` §5.3 for the original design.
+//! These types are used by every provider and by the operations planner,
+//! so the rest of the app never has to care whether a `Disk` came from the
+//! real Linux or Windows backend.
 
 mod disk;
 mod filesystem;

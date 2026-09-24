@@ -7,8 +7,6 @@
 //! app (planner, validator, Tauri commands, UI) never branches on target
 //! OS itself.
 
-pub mod mock;
-
 #[cfg(target_os = "linux")]
 pub mod linux;
 
@@ -103,7 +101,6 @@ pub trait DiskInventory: Send + Sync {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize)]
 #[serde(rename_all = "camelCase")]
 pub enum InventorySource {
-    Mock,
     Linux,
     Windows,
 }

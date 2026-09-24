@@ -40,7 +40,7 @@ const sampleDisk: Disk = {
   ],
 };
 
-function mockBackend(disks: Disk[], info: AppInfo = { version: "0.0.0-test", mode: "mock" }) {
+function mockBackend(disks: Disk[], info: AppInfo = { version: "0.0.0-test" }) {
   mockedInvoke.mockImplementation((cmd) => {
     if (cmd === "app_info") return Promise.resolve(info);
     if (cmd === "disks_list") return Promise.resolve(disks);
@@ -58,15 +58,17 @@ describe("App", () => {
 
     // Let the mocked backend calls settle inside act() before the test
     // unmounts, same reasoning as in the Phase 2 scaffold smoke test.
-    await screen.findByText("Mock-Modus aktiv – es werden keine echten Laufwerke verändert.");
+    await screen.findByText("Änderungen wirken auf echte Datenträger. Erstelle vorher ein Backup.");
   });
 
-  it("shows the mock-mode banner once app info loads", async () => {
+  it("shows the real-disk warning banner once app info loads", async () => {
     mockBackend([]);
     render(<App />);
 
     expect(
-      await screen.findByText("Mock-Modus aktiv – es werden keine echten Laufwerke verändert."),
+      await screen.findByText(
+        "Änderungen wirken auf echte Datenträger. Erstelle vorher ein Backup.",
+      ),
     ).toBeInTheDocument();
   });
 

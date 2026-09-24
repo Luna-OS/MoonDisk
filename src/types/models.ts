@@ -112,9 +112,6 @@ export function operationRisk(req: OperationRequest): RiskLevel {
   }
 }
 
-export type Mode = "mock" | "real";
-
 export interface AppInfo {
   version: string;
-  mode: Mode;
 }

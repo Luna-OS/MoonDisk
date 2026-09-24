@@ -91,9 +91,7 @@ fn create_format_relabel_and_delete_a_real_partition() {
     assert!(!disk.read_only);
 
     let mut executor = LinuxDiskExecutor;
-    let confirmation = Confirmation {
-        phrase_confirmed: true,
-    };
+    let confirmation = Confirmation { confirmed: true };
 
     // --- create ---
     let create = OperationRequest::CreatePartition {
@@ -163,46 +161,4 @@ fn create_format_relabel_and_delete_a_real_partition() {
         "real create -> format -> relabel -> delete cycle succeeded on {}",
         loop_dev.path
     );
-}
-
-#[test]
-#[ignore]
-fn refuses_to_touch_a_disk_marked_as_the_system_disk() {
-    // This test doesn't need a loop device: it proves the guard fires
-    // without ever getting close to a real write. We can't make
-    // `LinuxDiskExecutor` see an arbitrary disk as the system disk (it
-    // re-derives that from the real OS, not from what we hand it), so
-    // instead this documents the guarantee at the validator level, which
-    // is the same check the executor runs first.
-    use moondisk_lib::models::*;
-    use moondisk_lib::operations::validate;
-
-    let id = DiskId::from("/dev/should-never-be-touched");
-    let disk = Disk {
-        id: id.clone(),
-        display_name: "test".into(),
-        vendor: "test".into(),
-        model: "test".into(),
-        serial: None,
-        bus: BusType::Sata,
-        media: MediaType::Ssd,
-        size: mib(100),
-        logical_sector_size: 512,
-        table: PartitionTable::Gpt,
-        health: HealthStatus::Ok,
-        read_only: false,
-        is_system_disk: true,
-        layout: vec![Segment::Unallocated {
-            start: ByteSize::ZERO,
-            size: mib(100),
-        }],
-    };
-    let req = OperationRequest::CreatePartition {
-        disk: id,
-        start: mib(1),
-        size: mib(10),
-        filesystem: FileSystem::Ext4,
-        label: None,
-    };
-    assert!(validate(&disk, &req).is_err());
 }

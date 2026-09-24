@@ -1,14 +1,28 @@
-import type { Disk, Segment } from "@/types/models";
+import type { Disk, FileSystem, PartitionKind, Segment } from "@/types/models";
 import { bytesValue, formatBytes } from "@/lib/format";
 
-const SEGMENT_COLORS: Record<string, string> = {
+// Special partition kinds get a fixed color regardless of filesystem, so
+// e.g. a Recovery (NTFS) partition never looks the same as the main
+// Windows (NTFS) partition sitting right next to it.
+const KIND_COLORS: Partial<Record<PartitionKind, string>> = {
   efi: "bg-sky-300",
-  microsoftReserved: "bg-violet-700",
-  recovery: "bg-warning-400",
-  basicData: "bg-lavender-400",
-  linuxFilesystem: "bg-mint-400",
-  linuxSwap: "bg-error-500",
-  other: "bg-lavender-300",
+  microsoftReserved: "bg-slate-500",
+  recovery: "bg-amber-400",
+};
+
+// Everything else is colored by filesystem, so partitions with different
+// filesystems on the same disk are distinguishable at a glance instead of
+// all blending into one or two colors.
+const FS_COLORS: Partial<Record<FileSystem, string>> = {
+  ntfs: "bg-blue-400",
+  fat32: "bg-teal-400",
+  exFat: "bg-cyan-400",
+  ext2: "bg-lime-400",
+  ext3: "bg-green-400",
+  ext4: "bg-emerald-400",
+  btrfs: "bg-orange-400",
+  xfs: "bg-fuchsia-400",
+  linuxSwap: "bg-rose-500",
 };
 
 function segmentLabel(seg: Segment): string {
@@ -19,7 +33,8 @@ function segmentLabel(seg: Segment): string {
 
 function segmentColorClass(seg: Segment): string {
   if (seg.kind === "unallocated") return "bg-(--md-color-surface-border)";
-  return SEGMENT_COLORS[seg.value.kind] ?? "bg-lavender-300";
+  const p = seg.value;
+  return KIND_COLORS[p.kind] ?? FS_COLORS[p.fs] ?? "bg-zinc-400";
 }
 
 export interface PartitionBarProps {
@@ -29,7 +44,7 @@ export interface PartitionBarProps {
 }
 
 /** Keyboard-navigable partition bar: arrow keys move between segments,
- * Enter/Space selects. See docs/architecture.md §7. */
+ * Enter/Space selects. */
 export function PartitionBar({ disk, selectedId, onSelect }: PartitionBarProps) {
   const total = bytesValue(disk.size);
 
