@@ -1,0 +1,80 @@
+<!--
+  MoonDisk axolotl "disk spirit" — standalone character mascot.
+
+  Original artwork for the MoonDisk project (GPL-3.0-or-later, see LICENSE).
+  Deliberately designed to differ from the project brief's style-reference
+  image (curled "data ring" pose instead of lying/sleeping on a moon, no
+  moon underneath, star-tipped gills instead of flowing fins, a partition
+  ring instead of a held object) — see docs/branding.md §1 and §3. That
+  reference image is not reproduced anywhere in this project.
+
+  Use freestanding on any surface (see docs/branding.md §7 for where this
+  appears in the UI). For the moon+stars composition, see
+  moondisk-mascot.svg. For the app icon, see moondisk-icon.svg.
+-->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-labelledby="moondisk-axolotl-title">
+  <title id="moondisk-axolotl-title">MoonDisk-Axolotl, der Datenträgergeist</title>
+
+  <defs>
+    <linearGradient id="md-axolotl-body" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%" stop-color="#B9AEFB"/>
+      <stop offset="50%" stop-color="#9AD7F5"/>
+      <stop offset="100%" stop-color="#7FE3C6"/>
+    </linearGradient>
+    <linearGradient id="md-axolotl-gill" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#D6CFFD"/>
+      <stop offset="100%" stop-color="#8F7FE8"/>
+    </linearGradient>
+    <radialGradient id="md-axolotl-glow" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#B9AEFB" stop-opacity="0.35"/>
+      <stop offset="100%" stop-color="#B9AEFB" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+
+  <!-- soft magical glow behind the character -->
+  <circle cx="256" cy="256" r="220" fill="url(#md-axolotl-glow)"/>
+
+  <!-- six external gills, three per side, tips as small five-point stars -->
+  <g stroke-linecap="round">
+    <path d="M 156.63 113.02 Q 124.82 126.56 105.13 151.46" fill="none" stroke="url(#md-axolotl-gill)" stroke-width="6.5"/>
+    <polygon points="106.7,166.38 101.98,156.92 91.43,157.56 98.97,150.15 95.1,140.31 104.47,145.19 112.63,138.47 110.89,148.9 119.8,154.58 109.35,156.14" fill="#EFEAFF" stroke="#7A6FD1" stroke-width="1.4" stroke-linejoin="round"/>
+    <path d="M 179.39 77.97 Q 138.31 66.3 101.3 73.53" fill="none" stroke="url(#md-axolotl-gill)" stroke-width="6.5"/>
+    <polygon points="92.97,90.61 94.26,77.28 82.49,70.89 95.56,67.99 98,54.82 104.8,66.36 118.08,64.61 109.21,74.65 114.97,86.73 102.69,81.39" fill="#EFEAFF" stroke="#7A6FD1" stroke-width="1.4" stroke-linejoin="round"/>
+    <path d="M 212.53 59.98 Q 188.12 36.21 160.99 26.43" fill="none" stroke="url(#md-axolotl-gill)" stroke-width="6.5"/>
+    <polygon points="148.41,34.6 154.7,26.1 149.33,16.99 159.36,20.35 166.36,12.43 166.27,23 175.97,27.22 165.88,30.4 164.87,40.92 158.73,32.31" fill="#EFEAFF" stroke="#7A6FD1" stroke-width="1.4" stroke-linejoin="round"/>
+    <path d="M 310.22 113.02 Q 339.84 126.79 357.74 151.04" fill="none" stroke="url(#md-axolotl-gill)" stroke-width="6.5"/>
+    <polygon points="359.2,137.12 361.68,146.67 371.44,148.13 363.11,153.43 364.74,163.17 357.13,156.89 348.37,161.45 351.99,152.26 344.95,145.35 354.8,145.95" fill="#EFEAFF" stroke="#7A6FD1" stroke-width="1.4" stroke-linejoin="round"/>
+    <path d="M 287.46 77.97 Q 328.54 66.3 365.55 73.53" fill="none" stroke="url(#md-axolotl-gill)" stroke-width="6.5"/>
+    <polygon points="357.22,56.46 366.93,65.68 379.22,60.34 373.45,72.42 382.32,82.45 369.05,80.71 362.25,92.25 359.81,79.08 346.73,76.18 358.5,69.79" fill="#EFEAFF" stroke="#7A6FD1" stroke-width="1.4" stroke-linejoin="round"/>
+    <path d="M 254.33 59.98 Q 278.74 36.21 305.86 26.43" fill="none" stroke="url(#md-axolotl-gill)" stroke-width="6.5"/>
+    <polygon points="293.28,18.26 303.61,20.55 309.75,11.94 310.76,22.47 320.84,25.65 311.15,29.86 311.24,40.44 304.23,32.52 294.21,35.87 299.57,26.76" fill="#EFEAFF" stroke="#7A6FD1" stroke-width="1.4" stroke-linejoin="round"/>
+  </g>
+
+  <!-- body, curled into a ring like a spinning data disk; head and tail
+       almost meet, leaving a small gap -->
+  <path d="M 355.59 182.44 A 130 130 0 1 1 233.43 137.97"
+        fill="none" stroke="url(#md-axolotl-body)" stroke-width="95" stroke-linecap="round"/>
+
+  <!-- tail fin -->
+  <path d="M 365.21 135.85 Q 395.8 121.23 440.96 141.24 Q 439.85 184.14 415.65 207.89 Z"
+        fill="#8FE9CE"/>
+
+  <!-- three faint concentric grooves on the belly: an abstracted partition
+       ring / storage platter, per docs/branding.md §3 -->
+  <g fill="none" stroke="#FBF7F0" stroke-linecap="round">
+    <path d="M 342.6 216 A 100 100 0 1 1 159.41 240.12" stroke-width="2.4" opacity="0.32"/>
+    <path d="M 332.21 222 A 88 88 0 1 1 171 243.22" stroke-width="2.4" opacity="0.26"/>
+    <path d="M 321.82 228 A 76 76 0 1 1 182.59 246.33" stroke-width="2.4" opacity="0.2"/>
+  </g>
+
+  <!-- head -->
+  <circle cx="233.43" cy="137.97" r="85" fill="#C7BDFD"/>
+
+  <!-- closed, content eyes and a small smile — no cheek blushes, kept
+       calm rather than overtly cutesy per docs/branding.md §3 -->
+  <g fill="none" stroke="#241C46" stroke-linecap="round">
+    <path d="M 196.43 153.97 Q 206.43 161.97 216.43 153.97" stroke-width="4.2"/>
+    <path d="M 250.43 153.97 Q 260.43 161.97 270.43 153.97" stroke-width="4.2"/>
+    <path d="M 224.43 175.97 Q 233.43 181.97 242.43 175.97" stroke-width="3.6"/>
+  </g>
+</svg>

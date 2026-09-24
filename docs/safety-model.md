@@ -6,6 +6,26 @@
 > [Unterstützte Operationen](supported-operations.md) ·
 > [Bug-Reporter](bug-reporter.md)
 
+> **Nachträgliche Entscheidung:** Ab `0.1.0` führt MoonDisk im `real`-Modus
+> echte Schreiboperationen aus – eine bewusste, informierte Entscheidung des
+> Projektverantwortlichen, siehe [Roadmap](roadmap.md) für den Kontext.
+> §3 unten ("Alpha-Schreibsperre") beschreibt entsprechend nicht mehr den
+> aktuellen Zustand: `REAL_WRITES_ENABLED` als hartkodierte `false`-Konstante
+> wurde nicht umgesetzt. An seine Stelle sind getreten:
+> `commands::Mode` (Standard weiterhin `mock`, `MOONDISK_MODE=real` als
+> expliziter Opt-in), erneute Validierung unmittelbar vor jeder Ausführung
+> (`operations::validate`), `security::system_protection` (blockiert
+> hartkodiert die Platte, auf der das laufende Betriebssystem installiert
+> ist) und die Bestätigungsphrase aus §8 für alles ab Risikostufe „Hoch“.
+> Der reale Schreibpfad ist unter Linux gegen ein Loop-Device getestet
+> (`src-tauri/tests/linux_write_path.rs`); die Windows-Implementierung folgt
+> denselben Prinzipien (feste PowerShell-Skripte, keine String-Interpolation
+> von Nutzereingaben), ist aber mangels Windows-Testumgebung nicht auf
+> echter Hardware verifiziert. Resize und Move sind weiterhin nicht
+> implementiert (siehe `ExecutionError::NotImplemented`) — das war der
+> Alpha-Plan, der unten am ausführlichsten beschrieben ist, und bleibt aus
+> Zeit- und Sicherheitsgründen weiterhin nicht umgesetzt.
+
 ## 1. Schutzziele (in dieser Rangfolge)
 
 1. **Echte Nutzerdaten werden unter keinen Umständen verändert.**

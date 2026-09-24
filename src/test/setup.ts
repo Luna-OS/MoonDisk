@@ -6,10 +6,11 @@ afterEach(() => {
   cleanup();
 });
 
-// The real Tauri IPC bridge (`window.__TAURI_INTERNALS__`) only exists
-// inside a Tauri webview. Component tests run in jsdom, so any call to
-// `@tauri-apps/api` must be mocked per-test; this just gives every test a
-// clean, predictable starting point instead of an unhandled rejection.
-vi.mock("@tauri-apps/api/app", () => ({
-  getVersion: vi.fn().mockResolvedValue("0.0.0-test"),
+// The real Tauri IPC bridge only exists inside a Tauri webview. Component
+// tests run in jsdom, so `invoke` is mocked per-test via
+// `vi.mocked(invoke)` — this just gives every test a clean, predictable
+// starting point instead of an unhandled rejection when a component calls
+// it during mount.
+vi.mock("@tauri-apps/api/core", () => ({
+  invoke: vi.fn().mockRejectedValue(new Error("invoke() not mocked for this test")),
 }));

@@ -1,6 +1,6 @@
 [package]
 name = "moondisk"
-version = "0.1.0-alpha.1"
+version = "0.1.0"
 description = "MoonDisk – Deine Laufwerke. Sicher im Mondlicht. Ein lokaler, quelloffener Partitionsmanager."
 authors = ["MoonDisk contributors"]
 license = "GPL-3.0-or-later"
@@ -25,6 +25,8 @@ tauri-build = { version = "2.6.3", features = [] }
 tauri = { version = "2.11.6", features = [] }
 serde = { version = "1.0.229", features = ["derive"] }
 serde_json = "1.0.151"
+bitflags = { version = "2.13.2", features = ["serde"] }
+thiserror = "2.0.21"
 
 [profile.release]
 panic = "abort"

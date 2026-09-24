@@ -5,6 +5,21 @@
 > Verwandte Dokumente: [Architektur](architecture.md) · [Sicherheitsmodell](safety-model.md) ·
 > [Release-Prozess](release-process.md)
 
+> **Nachträgliche Entscheidung (nach Phase 3):** Der Projektverantwortliche hat
+> sich, nach ausdrücklichem Hinweis auf das Risiko unwiderruflichen
+> Datenverlusts, bewusst dafür entschieden, echte Schreiboperationen bereits
+> in `0.1.0` umzusetzen, statt sie wie unten geplant erst nach einer
+> mehrmonatigen reinen Mock-Alpha-Phase freizugeben. Die darunterliegende
+> Sicherheitsarchitektur (Planer → Validierung → Bestätigungsphrase →
+> Executor, Systemplatten-Schutz) ist dieselbe geblieben; nur das externe
+> Sicherheits-Review und die separate Beta-Phase vor echten Schreibrechten
+> (Punkt 7–8 in [Sicherheitsmodell §10](safety-model.md#10-voraussetzungen-für-echte-schreiboperationen-in-späteren-versionen))
+> wurden durch diese bewusste Entscheidung ersetzt. Die Versionsnummer trägt
+> deshalb kein `-alpha`-Suffix mehr. Der restliche Phasenplan unten
+> beschreibt weiterhin den ursprünglichen, vorsichtigeren Ablauf und dient
+> als Referenz dafür, welche Absicherungen vor dieser Entscheidung geplant
+> waren.
+
 ## 1. Entwicklungsphasen bis `0.1.0-alpha.1`
 
 Jede Phase endet nur, wenn Tests, Linting, Formatierung und ein Build-Check
