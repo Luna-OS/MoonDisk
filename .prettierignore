@@ -1,0 +1,13 @@
+dist
+node_modules
+src-tauri/target
+src-tauri/gen
+src/types/generated
+package-lock.json
+
+# Markdown is intentionally not Prettier-formatted: this project's docs rely
+# heavily on hand-aligned tables (see docs/), and Prettier's table-column
+# padding produces large, noisy diffs on every edit without improving
+# readability of the rendered output. Prose/Markdown structure is reviewed
+# by hand instead.
+*.md

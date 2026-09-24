@@ -1,0 +1,47 @@
+# Dependencies
+node_modules/
+
+# Frontend build output
+dist/
+dist-ssr/
+*.local
+
+# Vite / TypeScript build caches
+node_modules/.tmp/
+*.tsbuildinfo
+
+# Test coverage
+coverage/
+
+# Rust build output
+src-tauri/target/
+# Tauri's generated mobile/desktop scaffolding (not used in the alpha, but
+# ignored in case `tauri android/ios init` is ever run locally)
+src-tauri/gen/
+
+# Auto-generated TypeScript types (regenerated from Rust via ts-rs, see
+# docs/architecture.md §6.1 — never edited by hand, never a source of truth)
+src/types/generated/
+
+# Real GitHub bug-reporter configuration.
+# NEVER commit this file: it may contain a configured owner/repo pair the
+# maintainers did not intend to publish. Only the example stays in git.
+# See docs/bug-reporter.md §10.
+src-tauri/config/github.toml
+
+# Editors / OS
+.DS_Store
+Thumbs.db
+.vscode/*
+!.vscode/extensions.json
+.idea/
+
+# Logs
+*.log
+npm-debug.log*
+
+# Env files (MoonDisk reads MOONDISK_*/TAURI_* env vars directly; a local
+# .env is a developer convenience only and must never be committed since it
+# could carry a real GitHub owner/repo or other local overrides)
+.env
+.env.local

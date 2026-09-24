@@ -1,0 +1,101 @@
+@import "tailwindcss";
+
+/*
+ * MoonDisk design tokens.
+ *
+ * Tailwind v4 is configured CSS-first (see docs/architecture.md, decision
+ * A8): there is no tailwind.config.ts, `@theme` below is the single source
+ * of truth for Tailwind's generated utility classes (bg-lavender-400, …).
+ *
+ * The semantic custom properties further down (--md-color-*) are the ones
+ * components should reach for directly; they carry the light/dark switch
+ * and keep intent ("this is the primary action color") separate from the
+ * raw palette. See docs/branding.md §6 for the palette itself — this is a
+ * scaffold only, the full component design system is built out in the UI
+ * phases (Roadmap phases 6–10), not in Phase 2.
+ */
+@theme {
+  --color-night-950: #0e0b22;
+  --color-night-900: #161233;
+  --color-violet-700: #3b2e6b;
+  --color-lavender-400: #b9aefb;
+  --color-lavender-300: #d6cffd;
+  --color-mint-400: #7fe3c6;
+  --color-sky-300: #9ad7f5;
+  --color-cream-100: #fbf7f0;
+  --color-success-400: #7fe3c6;
+  --color-warning-400: #f3c766;
+  --color-error-500: #e5626b;
+
+  --radius-md: 0.75rem;
+  --radius-lg: 1.25rem;
+}
+
+:root {
+  color-scheme: dark;
+
+  --md-color-bg: var(--color-night-950);
+  --md-color-surface: var(--color-night-900);
+  --md-color-surface-border: color-mix(in srgb, var(--color-lavender-400) 22%, transparent);
+  --md-color-text: var(--color-cream-100);
+  --md-color-text-muted: color-mix(in srgb, var(--color-cream-100) 68%, transparent);
+  --md-color-primary: var(--color-lavender-400);
+  --md-color-secondary: var(--color-mint-400);
+  --md-color-focus-ring: var(--color-lavender-300);
+  --md-color-success: var(--color-success-400);
+  --md-color-warning: var(--color-warning-400);
+  --md-color-error: var(--color-error-500);
+
+  --md-motion-duration: 200ms;
+}
+
+/* Helles Theme – Standard ist das dunkle Nacht-Theme (docs/architecture.md §7). */
+:root[data-theme="light"] {
+  color-scheme: light;
+
+  --md-color-bg: #f5f2fb;
+  --md-color-surface: #ffffff;
+  --md-color-surface-border: color-mix(in srgb, var(--color-violet-700) 16%, transparent);
+  --md-color-text: #1c1733;
+  --md-color-text-muted: color-mix(in srgb, #1c1733 62%, transparent);
+}
+
+/* Respektiert die Systemeinstellung, bis Phase 12 die Animationseinstellung
+   in den App-Settings ergänzt (docs/architecture.md §7). */
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --md-motion-duration: 0ms;
+  }
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  background: var(--md-color-bg);
+  color: var(--md-color-text);
+  font-family:
+    system-ui,
+    -apple-system,
+    "Segoe UI",
+    Roboto,
+    sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Sichtbarer Tastaturfokus ist Pflicht (docs/architecture.md §7). */
+:focus-visible {
+  outline: 2px solid var(--md-color-focus-ring);
+  outline-offset: 2px;
+  border-radius: var(--radius-md);
+}
