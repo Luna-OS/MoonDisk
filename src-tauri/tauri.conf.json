@@ -27,14 +27,7 @@
   },
   "bundle": {
     "active": true,
-    "targets": ["deb", "rpm", "appimage", "nsis"],
-    "icon": ["icons/32x32.png", "icons/128x128.png", "icons/128x128@2x.png", "icons/icon.ico"],
-    "createUpdaterArtifacts": true
-  },
-  "plugins": {
-    "updater": {
-      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDlERTQxQUYwRjVFNjEzQTYKUldTbUUrYjE4QnJrblNWR1RxY2xhMU8xbHZzL1FFQnFyNzJHMFpjMk81WFRSOUpibzRPVnZhZVYK",
-      "endpoints": ["https://github.com/Luna-OS/MoonDisk/releases/latest/download/latest.json"]
-    }
+    "targets": ["deb", "rpm", "nsis"],
+    "icon": ["icons/32x32.png", "icons/128x128.png", "icons/128x128@2x.png", "icons/icon.ico"]
   }
 }

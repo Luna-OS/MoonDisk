@@ -5,7 +5,6 @@ import { operationRisk } from "@/types/models";
 import { formatBytes } from "@/lib/format";
 import { PartitionBar } from "@/components/PartitionBar";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
-import { UpdateBanner } from "@/components/UpdateBanner";
 
 const FS_OPTIONS: FileSystem[] = ["ntfs", "fat32", "exFat", "ext2", "ext3", "ext4", "btrfs", "xfs"];
 
@@ -129,8 +128,6 @@ export default function App() {
       </header>
 
       <main className="mx-auto flex max-w-4xl flex-col gap-6">
-        <UpdateBanner />
-
         {appInfo && (
           <div
             role="status"
