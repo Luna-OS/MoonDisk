@@ -29,14 +29,14 @@ final class HelperContractTests: XCTestCase {
         let disks = try decode([Disk].self, "listDisks")
         XCTAssertEqual(disks.count, 2)
 
-        let internal = disks[0]
-        XCTAssertTrue(internal.isSystemDisk)
-        XCTAssertEqual(internal.size.value, 500_277_790_720)
-        XCTAssertEqual(internal.partitions.count, 3)
-        XCTAssertTrue(internal.partitions[0].isBoot)
-        XCTAssertTrue(internal.partitions[0].isSystem)
-        XCTAssertEqual(internal.partitions[1].mountpoints, ["/", "/System/Volumes/Data"])
-        XCTAssertEqual(internal.partitions[1].title, "Partition 2")
+        let builtIn = disks[0]
+        XCTAssertTrue(builtIn.isSystemDisk)
+        XCTAssertEqual(builtIn.size.value, 500_277_790_720)
+        XCTAssertEqual(builtIn.partitions.count, 3)
+        XCTAssertTrue(builtIn.partitions[0].isBoot)
+        XCTAssertTrue(builtIn.partitions[0].isSystem)
+        XCTAssertEqual(builtIn.partitions[1].mountpoints, ["/", "/System/Volumes/Data"])
+        XCTAssertEqual(builtIn.partitions[1].title, "Partition 2")
 
         let stick = disks[1]
         XCTAssertTrue(stick.isUSB)

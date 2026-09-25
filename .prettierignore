@@ -11,3 +11,5 @@ package-lock.json
 # readability of the rendered output. Prose/Markdown structure is reviewed
 # by hand instead.
 *.md
+# Written by the Rust test helper_contract (UPDATE_FIXTURES=1).
+src-tauri/tests/fixtures/helper-messages.json
