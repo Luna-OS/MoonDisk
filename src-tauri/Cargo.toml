@@ -1,6 +1,6 @@
 [package]
 name = "moondisk"
-version = "0.2.10"
+version = "0.2.11"
 description = "MoonDisk – your disks, safely under the moon. A local, open-source partition manager."
 authors = ["MoonDisk contributors"]
 license = "GPL-3.0-or-later"

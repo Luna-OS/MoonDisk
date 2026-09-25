@@ -1816,7 +1816,7 @@ dependencies = [
 
 [[package]]
 name = "moondisk"
-version = "0.2.10"
+version = "0.2.11"
 dependencies = [
  "bitflags 2.13.2",
  "serde",

@@ -138,9 +138,9 @@ export default function App() {
         <header className="flex items-center justify-between gap-4">
           <div className="flex items-center gap-4">
             <img
-              src="/moondisk-icon.png"
+              src="/moondisk-logo.png"
               alt=""
-              className="size-14 rounded-2xl shadow-[0_0_44px_-6px_rgb(185_174_251/0.55)] ring-1 ring-lavender-400/30"
+              className="size-14 drop-shadow-[0_0_14px_rgb(185_174_251/0.45)]"
             />
             <div>
               <h1 className="md-title text-3xl font-semibold tracking-tight">MoonDisk</h1>
