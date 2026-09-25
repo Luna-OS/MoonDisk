@@ -8,6 +8,7 @@ let package = Package(
     name: "MoonDisk",
     platforms: [.macOS(.v13)],
     targets: [
-        .executableTarget(name: "MoonDisk", path: "Sources/MoonDisk")
+        .executableTarget(name: "MoonDisk", path: "Sources/MoonDisk"),
+        .testTarget(name: "MoonDiskTests", dependencies: ["MoonDisk"], path: "Tests/MoonDiskTests"),
     ]
 )

@@ -2,8 +2,9 @@ use super::{ByteSize, FileSystem, PartitionId, PartitionKind};
 use serde::{Deserialize, Serialize};
 
 bitflags::bitflags! {
-    #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-    #[serde(transparent)]
+    /// Sent to the UIs as a plain number (the bit mask), which both the web
+    /// UI and the Mac app read — not as bitflags' own "BOOT | SYSTEM" text.
+    #[derive(Debug, Clone, Copy, PartialEq, Eq)]
     pub struct PartitionFlags: u8 {
         const BOOT          = 0b0000_0001;
         const SYSTEM        = 0b0000_0010;
@@ -12,6 +13,18 @@ bitflags::bitflags! {
         /// MoonDisk refuses to modify this partition (see
         /// `security::system_protection`).
         const LOCKED        = 0b0000_1000;
+    }
+}
+
+impl Serialize for PartitionFlags {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        serializer.serialize_u8(self.bits())
+    }
+}
+
+impl<'de> Deserialize<'de> for PartitionFlags {
+    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        u8::deserialize(deserializer).map(PartitionFlags::from_bits_truncate)
     }
 }
 
@@ -65,5 +78,21 @@ impl Segment {
             Segment::Partition(p) => p.size,
             Segment::Unallocated { size, .. } => *size,
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn flags_are_sent_as_a_number() {
+        let flags = PartitionFlags::BOOT | PartitionFlags::SYSTEM;
+        assert_eq!(serde_json::to_string(&flags).unwrap(), "3");
+        assert_eq!(
+            serde_json::to_string(&PartitionFlags::empty()).unwrap(),
+            "0"
+        );
+        assert_eq!(serde_json::from_str::<PartitionFlags>("3").unwrap(), flags);
     }
 }

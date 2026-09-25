@@ -1,0 +1,151 @@
+{
+  "flashProgress": {
+    "bytesPerSecond": 31457280.0,
+    "done": "536870912",
+    "phase": "writing",
+    "total": "1185939456"
+  },
+  "imageInfo": [
+    {
+      "copyMode": {
+        "label": "ARCH_202409",
+        "reason": null,
+        "supported": true
+      },
+      "hasBootSector": true,
+      "name": "archlinux-2024.09.01-x86_64.iso",
+      "path": "/Users/luna/Downloads/archlinux-2024.09.01-x86_64.iso",
+      "size": "1185939456"
+    },
+    {
+      "copyMode": {
+        "label": null,
+        "reason": "This is a Windows (UDF) image.",
+        "supported": false
+      },
+      "hasBootSector": false,
+      "name": "Win11.iso",
+      "path": "/Users/luna/Downloads/Win11.iso",
+      "size": "5819484160"
+    }
+  ],
+  "listDisks": [
+    {
+      "bus": "nvme",
+      "displayName": "disk0",
+      "health": "ok",
+      "id": "disk0",
+      "isSystemDisk": true,
+      "layout": [
+        {
+          "kind": "partition",
+          "value": {
+            "driveLetter": null,
+            "flags": 3,
+            "fs": "fat32",
+            "id": "disk0#1",
+            "kind": "efi",
+            "label": "EFI",
+            "mountpoints": [],
+            "number": 1,
+            "size": "524288000",
+            "start": "24576",
+            "used": null
+          }
+        },
+        {
+          "kind": "partition",
+          "value": {
+            "driveLetter": null,
+            "flags": 6,
+            "fs": "apfs",
+            "id": "disk0#2",
+            "kind": "other",
+            "label": null,
+            "mountpoints": [
+              "/",
+              "/System/Volumes/Data"
+            ],
+            "number": 2,
+            "size": "494384795648",
+            "start": "524312576",
+            "used": null
+          }
+        },
+        {
+          "kind": "partition",
+          "value": {
+            "driveLetter": null,
+            "flags": 0,
+            "fs": "apfs",
+            "id": "disk0#3",
+            "kind": "recovery",
+            "label": null,
+            "mountpoints": [],
+            "number": 3,
+            "size": "5368664064",
+            "start": "494909108224",
+            "used": null
+          }
+        }
+      ],
+      "logicalSectorSize": 4096,
+      "media": "ssd",
+      "model": "APPLE SSD AP0512Z",
+      "readOnly": false,
+      "serial": "0ba0123456789",
+      "size": "500277790720",
+      "table": "gpt",
+      "vendor": "Apple"
+    },
+    {
+      "bus": "usb",
+      "displayName": "disk4",
+      "health": "unknown",
+      "id": "disk4",
+      "isSystemDisk": false,
+      "layout": [
+        {
+          "kind": "unallocated",
+          "value": {
+            "size": "1048576",
+            "start": "0"
+          }
+        },
+        {
+          "kind": "partition",
+          "value": {
+            "driveLetter": null,
+            "flags": 1,
+            "fs": "fat32",
+            "id": "disk4#2",
+            "kind": "efi",
+            "label": "ARCHISO_EFI",
+            "mountpoints": [
+              "/Volumes/ARCHISO_EFI"
+            ],
+            "number": 2,
+            "size": "25165824",
+            "start": "1048576",
+            "used": null
+          }
+        },
+        {
+          "kind": "unallocated",
+          "value": {
+            "size": "123034664960",
+            "start": "26214400"
+          }
+        }
+      ],
+      "logicalSectorSize": 512,
+      "media": "unknown",
+      "model": "Ultra",
+      "readOnly": false,
+      "serial": null,
+      "size": "123060879360",
+      "table": "mbr",
+      "vendor": "SanDisk"
+    }
+  ]
+}

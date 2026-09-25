@@ -108,6 +108,8 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: src-tauri
+      - name: Swift tests (decode the helper's JSON)
+        run: swift test --package-path macos
       - run: macos/build-app.sh --quick
 
   safety-scan:

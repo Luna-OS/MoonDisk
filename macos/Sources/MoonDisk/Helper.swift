@@ -140,8 +140,28 @@ final class HelperConnection {
         file: Int32? = nil
     ) async throws -> T {
         let data = try await call(command, parameters, file: file)
-        return try JSONDecoder().decode(T.self, from: data)
+        do {
+            return try JSONDecoder().decode(T.self, from: data)
+        } catch let error as DecodingError {
+            throw HelperError.message("The helper's answer to \(command) didn't fit: \(describe(error))")
+        }
     }
+}
+
+/// Says which field didn't fit — "The data couldn't be read because it
+/// isn't in the correct format" alone doesn't help anyone.
+func describe(_ error: DecodingError) -> String {
+    let context: DecodingError.Context
+    switch error {
+    case .typeMismatch(_, let c), .valueNotFound(_, let c), .keyNotFound(_, let c), .dataCorrupted(let c):
+        context = c
+    @unknown default:
+        return error.localizedDescription
+    }
+    let path = context.codingPath
+        .map { key in key.intValue.map { "[\($0)]" } ?? ".\(key.stringValue)" }
+        .joined()
+    return path.isEmpty ? context.debugDescription : "\(path): \(context.debugDescription)"
 }
 
 /// Hands an open file to the helper. It runs as root, but macOS' privacy
