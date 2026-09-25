@@ -3,6 +3,7 @@ import type { AppInfo, Disk, FileSystem, OperationRequest, Segment } from "@/typ
 import { executeOperation, getAppInfo, listDisks } from "@/lib/ipc";
 import { operationRisk } from "@/types/models";
 import { formatBytes } from "@/lib/format";
+import { alignedFreeRange } from "@/lib/alignment";
 import { PartitionBar } from "@/components/PartitionBar";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
 
@@ -400,6 +401,13 @@ function FreeSpaceActions({
   const [fs, setFs] = useState<FileSystem>("ext4");
   const [label, setLabel] = useState("");
 
+  // The free region's own bytes aren't guaranteed to be 1-MiB-aligned
+  // (gaps between existing partitions on a real disk often aren't), but
+  // MoonDisk's own partitions always are, so "use the entire free region"
+  // has to shrink to the largest aligned sub-range that fits rather than
+  // send the raw bytes straight through and have the backend reject them.
+  const aligned = alignedFreeRange(start, size);
+
   return (
     <li className="flex flex-col gap-3 rounded-md border border-dashed border-(--md-color-surface-border) p-4">
       <div className="text-sm font-medium">Nicht zugewiesen · {formatBytes(size)}</div>
@@ -427,33 +435,40 @@ function FreeSpaceActions({
           />
         </label>
         <button
-          disabled={busy}
-          onClick={() =>
+          disabled={busy || !aligned}
+          onClick={() => {
+            if (!aligned) return;
             onCreate({
               type: "createPartition",
               disk: disk.id,
-              start,
-              size,
+              start: aligned.start,
+              size: aligned.size,
               filesystem: fs,
               label: label || null,
-            })
-          }
+            });
+          }}
           className="rounded-md border px-3 py-1 text-sm border-(--md-color-primary) text-(--md-color-primary) disabled:opacity-40"
         >
           Partition über gesamten freien Bereich erstellen
         </button>
       </div>
-      <p className="text-xs text-(--md-color-text-muted)">
-        Risiko:{" "}
-        {operationRisk({
-          type: "createPartition",
-          disk: disk.id,
-          start,
-          size,
-          filesystem: fs,
-          label: null,
-        })}
-      </p>
+      {aligned ? (
+        <p className="text-xs text-(--md-color-text-muted)">
+          Risiko:{" "}
+          {operationRisk({
+            type: "createPartition",
+            disk: disk.id,
+            start: aligned.start,
+            size: aligned.size,
+            filesystem: fs,
+            label: null,
+          })}
+        </p>
+      ) : (
+        <p className="text-xs text-(--md-color-text-muted)">
+          Bereich ist kleiner als 1 MiB nach Ausrichtung – zu klein für eine Partition.
+        </p>
+      )}
     </li>
   );
 }
