@@ -7,6 +7,8 @@ param(
     [Parameter(Mandatory)] [int]    $DiskNumber,
     [Parameter(Mandatory)] [int64]  $OffsetBytes,
     [Parameter(Mandatory)] [int64]  $SizeBytes,
+    [Parameter(Mandatory)] [string] $FileSystem,
+    [string]                        $Label = '',
     [string]                        $DriveLetter = ''
 )
 
@@ -41,12 +43,30 @@ if ($justInitialized) {
     $params['Size'] = $SizeBytes
 }
 
-if ($DriveLetter -ne '') {
-    $params['DriveLetter'] = $DriveLetter[0]
-} else {
-    $params['AssignDriveLetter'] = $false
-}
+$params['AssignDriveLetter'] = $false
+$new = New-Partition @params
+$number = $new.PartitionNumber
 
-New-Partition @params | Out-Null
+$formatParams = @{
+    FileSystem = $FileSystem
+    Confirm    = $false
+    Force      = $true
+}
+if ($Label -ne '') {
+    $formatParams['NewFileSystemLabel'] = $Label
+}
+Get-Partition -DiskNumber $DiskNumber -PartitionNumber $number | Format-Volume @formatParams | Out-Null
+
+# The letter is added only after formatting, and checked afterwards:
+# `New-Partition -DriveLetter` could leave a partition without a letter
+# and without an error, so it never showed up in Explorer.
+if ($DriveLetter -ne '') {
+    $letter = [string]$DriveLetter[0]
+    Add-PartitionAccessPath -DiskNumber $DiskNumber -PartitionNumber $number -AccessPath "${letter}:\"
+    $after = Get-Partition -DiskNumber $DiskNumber -PartitionNumber $number
+    if ([string]$after.DriveLetter -ne $letter) {
+        throw "Partition erstellt, aber Laufwerksbuchstabe ${letter}: wurde nicht zugewiesen (ist er schon belegt?)"
+    }
+}
 
 Write-Output 'OK'

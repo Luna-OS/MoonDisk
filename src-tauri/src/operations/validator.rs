@@ -45,9 +45,13 @@ pub fn validate(disk: &Disk, req: &OperationRequest) -> Result<(), ValidationErr
         OperationRequest::CreatePartition {
             start,
             size,
+            label,
             drive_letter,
             ..
         } => {
+            if let Some(l) = label {
+                validate_label(l)?;
+            }
             if !is_aligned(*start) || !is_aligned(*size) {
                 return Err(ValidationError::Alignment);
             }

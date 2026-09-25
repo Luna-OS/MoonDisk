@@ -39,9 +39,12 @@ impl DiskOperationExecutor for WindowsDiskExecutor {
             OperationRequest::CreatePartition {
                 start,
                 size,
+                filesystem,
+                label,
                 drive_letter,
                 ..
             } => {
+                let fs_name = windows_fs_name(*filesystem)?;
                 let mut args = vec![
                     "-DiskNumber".to_string(),
                     disk_number.to_string(),
@@ -49,7 +52,13 @@ impl DiskOperationExecutor for WindowsDiskExecutor {
                     start.0.to_string(),
                     "-SizeBytes".to_string(),
                     size.0.to_string(),
+                    "-FileSystem".to_string(),
+                    fs_name.to_string(),
                 ];
+                if let Some(l) = label {
+                    args.push("-Label".to_string());
+                    args.push(l.clone());
+                }
                 if let Some(l) = drive_letter {
                     args.push("-DriveLetter".to_string());
                     args.push(l.to_string());

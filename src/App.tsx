@@ -7,7 +7,19 @@ import { alignedFreeRange } from "@/lib/alignment";
 import { PartitionBar } from "@/components/PartitionBar";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
 
-const FS_OPTIONS: FileSystem[] = ["ntfs", "fat32", "exFat", "ext2", "ext3", "ext4", "btrfs", "xfs"];
+const LINUX_FS_OPTIONS: FileSystem[] = [
+  "ext4",
+  "btrfs",
+  "xfs",
+  "ext3",
+  "ext2",
+  "ntfs",
+  "exFat",
+  "fat32",
+];
+// Windows can only format these without extra software.
+const WINDOWS_FS_OPTIONS: FileSystem[] = ["ntfs", "exFat", "fat32"];
+const fsOptions = (windows: boolean) => (windows ? WINDOWS_FS_OPTIONS : LINUX_FS_OPTIONS);
 // C..Z (24 letters) — A/B are reserved for legacy floppy drives.
 const DRIVE_LETTERS = Array.from({ length: 24 }, (_, i) => String.fromCharCode(67 + i));
 const MIB = 1024n * 1024n;
@@ -287,7 +299,7 @@ function PartitionActions({
   onDelete: (req: OperationRequest) => void;
 }) {
   const [label, setLabel] = useState(partition.label ?? "");
-  const [formatFs, setFormatFs] = useState<FileSystem>("ext4");
+  const [formatFs, setFormatFs] = useState<FileSystem>(fsOptions(showDriveLetter)[0]);
   const [driveLetter, setDriveLetter] = useState(partition.driveLetter ?? DRIVE_LETTERS[0]);
 
   return (
@@ -354,7 +366,7 @@ function PartitionActions({
             onChange={(e) => setFormatFs(e.target.value as FileSystem)}
             className="rounded border px-2 py-1 border-(--md-color-surface-border) bg-(--md-color-bg)"
           >
-            {FS_OPTIONS.map((fs) => (
+            {fsOptions(showDriveLetter).map((fs) => (
               <option key={fs} value={fs}>
                 {fs}
               </option>
@@ -402,7 +414,7 @@ function FreeSpaceActions({
   onCreate: (req: OperationRequest) => void;
   showDriveLetter: boolean;
 }) {
-  const [fs, setFs] = useState<FileSystem>("ext4");
+  const [fs, setFs] = useState<FileSystem>(fsOptions(showDriveLetter)[0]);
   const [label, setLabel] = useState("");
   const [driveLetter, setDriveLetter] = useState(DRIVE_LETTERS[1]);
 
@@ -435,7 +447,7 @@ function FreeSpaceActions({
             onChange={(e) => setFs(e.target.value as FileSystem)}
             className="rounded border px-2 py-1 border-(--md-color-surface-border) bg-(--md-color-bg)"
           >
-            {FS_OPTIONS.map((f) => (
+            {fsOptions(showDriveLetter).map((f) => (
               <option key={f} value={f}>
                 {f}
               </option>
