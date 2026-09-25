@@ -7,6 +7,8 @@ import { PartitionBar } from "@/components/PartitionBar";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
 
 const FS_OPTIONS: FileSystem[] = ["ntfs", "fat32", "exFat", "ext2", "ext3", "ext4", "btrfs", "xfs"];
+// C..Z (24 letters) — A/B are reserved for legacy floppy drives.
+const DRIVE_LETTERS = Array.from({ length: 24 }, (_, i) => String.fromCharCode(67 + i));
 
 function diskSummary(disk: Disk): string {
   return [
@@ -234,7 +236,9 @@ export default function App() {
                     key={id}
                     partition={seg.value}
                     busy={busy}
+                    showDriveLetter={appInfo?.platform === "windows"}
                     onLabel={(req) => void runDirect(req)}
+                    onDriveLetter={(req) => void runDirect(req)}
                     onFormat={(req) => askCritical(selectedDisk, req, "format")}
                     onDelete={(req) => askCritical(selectedDisk, req, "delete")}
                   />
@@ -265,18 +269,23 @@ export default function App() {
 function PartitionActions({
   partition,
   busy,
+  showDriveLetter,
   onLabel,
+  onDriveLetter,
   onFormat,
   onDelete,
 }: {
   partition: Extract<Segment, { kind: "partition" }>["value"];
   busy: boolean;
+  showDriveLetter: boolean;
   onLabel: (req: OperationRequest) => void;
+  onDriveLetter: (req: OperationRequest) => void;
   onFormat: (req: OperationRequest) => void;
   onDelete: (req: OperationRequest) => void;
 }) {
   const [label, setLabel] = useState(partition.label ?? "");
   const [formatFs, setFormatFs] = useState<FileSystem>("ext4");
+  const [driveLetter, setDriveLetter] = useState(partition.driveLetter ?? DRIVE_LETTERS[0]);
 
   return (
     <li className="flex flex-col gap-3 rounded-md border border-(--md-color-surface-border) bg-(--md-color-surface) p-4">
@@ -301,6 +310,38 @@ function PartitionActions({
           Label speichern
         </button>
       </div>
+
+      {showDriveLetter && (
+        <div className="flex flex-wrap items-end gap-2">
+          <label className="flex flex-col text-xs">
+            Laufwerksbuchstabe
+            <select
+              value={driveLetter}
+              onChange={(e) => setDriveLetter(e.target.value)}
+              className="rounded border px-2 py-1 border-(--md-color-surface-border) bg-(--md-color-bg)"
+            >
+              {DRIVE_LETTERS.map((l) => (
+                <option key={l} value={l}>
+                  {l}:
+                </option>
+              ))}
+            </select>
+          </label>
+          <button
+            disabled={busy || driveLetter === partition.driveLetter}
+            onClick={() =>
+              onDriveLetter({
+                type: "setDriveLetter",
+                partition: partition.id,
+                driveLetter,
+              })
+            }
+            className="rounded-md border px-3 py-1 text-sm border-(--md-color-surface-border) disabled:opacity-40"
+          >
+            {partition.driveLetter ? "Ändern" : "Zuweisen"}
+          </button>
+        </div>
+      )}
 
       <div className="flex flex-wrap items-end gap-2">
         <label className="flex flex-col text-xs">

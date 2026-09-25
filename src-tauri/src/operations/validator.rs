@@ -22,6 +22,8 @@ pub enum ValidationError {
     FilesystemUnsupported,
     #[error("Label ist ungültig oder zu lang")]
     InvalidLabel,
+    #[error("Laufwerksbuchstabe muss ein einzelner Buchstabe A-Z sein")]
+    InvalidDriveLetter,
 }
 
 const ALIGNMENT: u64 = 1024 * 1024; // 1 MiB, see docs/supported-operations.md §4
@@ -86,6 +88,16 @@ pub fn validate(disk: &Disk, req: &OperationRequest) -> Result<(), ValidationErr
         OperationRequest::SetLabel { partition, label } => {
             find_partition(disk, partition)?;
             validate_label(label)
+        }
+        OperationRequest::SetDriveLetter {
+            partition,
+            drive_letter,
+        } => {
+            find_partition(disk, partition)?;
+            if !drive_letter.is_ascii_alphabetic() {
+                return Err(ValidationError::InvalidDriveLetter);
+            }
+            Ok(())
         }
     }
 }
@@ -166,6 +178,29 @@ mod tests {
             partition: PartitionId::new(&disk.id, 1),
         };
         assert_eq!(validate(&disk, &req), Ok(()));
+    }
+
+    #[test]
+    fn accepts_a_valid_drive_letter() {
+        let disk = sample_disk();
+        let req = OperationRequest::SetDriveLetter {
+            partition: PartitionId::new(&disk.id, 1),
+            drive_letter: 'D',
+        };
+        assert_eq!(validate(&disk, &req), Ok(()));
+    }
+
+    #[test]
+    fn rejects_a_non_letter_drive_letter() {
+        let disk = sample_disk();
+        let req = OperationRequest::SetDriveLetter {
+            partition: PartitionId::new(&disk.id, 1),
+            drive_letter: '5',
+        };
+        assert_eq!(
+            validate(&disk, &req),
+            Err(ValidationError::InvalidDriveLetter)
+        );
     }
 
     #[test]

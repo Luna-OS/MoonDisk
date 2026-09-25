@@ -27,6 +27,13 @@ pub enum OperationRequest {
         partition: PartitionId,
         label: String,
     },
+    /// Windows only — assigns or changes a partition's drive letter.
+    /// Linux has no equivalent concept (see `Partition::drive_letter`) and
+    /// rejects this with `ExecutionError::NotImplemented`.
+    SetDriveLetter {
+        partition: PartitionId,
+        drive_letter: char,
+    },
 }
 
 impl OperationRequest {
@@ -40,7 +47,8 @@ impl OperationRequest {
             OperationRequest::CreatePartition { disk, .. } => disk.clone(),
             OperationRequest::DeletePartition { partition }
             | OperationRequest::FormatPartition { partition, .. }
-            | OperationRequest::SetLabel { partition, .. } => partition_disk(partition),
+            | OperationRequest::SetLabel { partition, .. }
+            | OperationRequest::SetDriveLetter { partition, .. } => partition_disk(partition),
         }
     }
 
@@ -50,12 +58,15 @@ impl OperationRequest {
             OperationRequest::DeletePartition { .. } => OperationKind::Delete,
             OperationRequest::FormatPartition { .. } => OperationKind::Format,
             OperationRequest::SetLabel { .. } => OperationKind::SetLabel,
+            OperationRequest::SetDriveLetter { .. } => OperationKind::SetDriveLetter,
         }
     }
 
     pub fn risk(&self) -> RiskLevel {
         match self {
-            OperationRequest::SetLabel { .. } => RiskLevel::Low,
+            OperationRequest::SetLabel { .. } | OperationRequest::SetDriveLetter { .. } => {
+                RiskLevel::Low
+            }
             OperationRequest::CreatePartition { .. } => RiskLevel::Medium,
             OperationRequest::DeletePartition { .. } | OperationRequest::FormatPartition { .. } => {
                 RiskLevel::Critical
@@ -77,6 +88,7 @@ pub enum OperationKind {
     Delete,
     Format,
     SetLabel,
+    SetDriveLetter,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]

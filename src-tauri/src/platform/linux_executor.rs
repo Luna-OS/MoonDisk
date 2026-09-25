@@ -78,6 +78,9 @@ impl DiskOperationExecutor for LinuxDiskExecutor {
                 let dev = partition_device_path(&disk.id.0, p.number);
                 set_label(&dev, p.fs, label)
             }
+            OperationRequest::SetDriveLetter { .. } => Err(ExecutionError::NotImplemented(
+                "Laufwerksbuchstaben gibt es unter Linux nicht".into(),
+            )),
         }
     }
 }

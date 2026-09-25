@@ -96,13 +96,15 @@ export type OperationRequest =
     }
   | { type: "deletePartition"; partition: string }
   | { type: "formatPartition"; partition: string; filesystem: FileSystem; label: string | null }
-  | { type: "setLabel"; partition: string; label: string };
+  | { type: "setLabel"; partition: string; label: string }
+  | { type: "setDriveLetter"; partition: string; driveLetter: string };
 
 export type RiskLevel = "low" | "medium" | "high" | "critical";
 
 export function operationRisk(req: OperationRequest): RiskLevel {
   switch (req.type) {
     case "setLabel":
+    case "setDriveLetter":
       return "low";
     case "createPartition":
       return "medium";
@@ -114,4 +116,7 @@ export function operationRisk(req: OperationRequest): RiskLevel {
 
 export interface AppInfo {
   version: string;
+  /** "windows" or "linux" — drive letters (setDriveLetter) only exist on
+   * Windows; Linux uses mountpoints instead. */
+  platform: "windows" | "linux";
 }

@@ -16,6 +16,7 @@ const CREATE_PARTITION_SCRIPT: &str = include_str!("windows_scripts/create_parti
 const DELETE_PARTITION_SCRIPT: &str = include_str!("windows_scripts/delete_partition.ps1");
 const FORMAT_PARTITION_SCRIPT: &str = include_str!("windows_scripts/format_partition.ps1");
 const SET_LABEL_SCRIPT: &str = include_str!("windows_scripts/set_label.ps1");
+const SET_DRIVE_LETTER_SCRIPT: &str = include_str!("windows_scripts/set_drive_letter.ps1");
 
 pub struct WindowsDiskExecutor;
 
@@ -105,6 +106,27 @@ impl DiskOperationExecutor for WindowsDiskExecutor {
                         &p.number.to_string(),
                         "-Label",
                         label,
+                    ],
+                )
+                .map_err(|e| ExecutionError::Failed(e.to_string()))?;
+            }
+            OperationRequest::SetDriveLetter {
+                partition,
+                drive_letter,
+            } => {
+                let p = disk
+                    .partitions()
+                    .find(|p| &p.id == partition)
+                    .expect("validated above: partition exists on this disk");
+                run_powershell_script(
+                    SET_DRIVE_LETTER_SCRIPT,
+                    &[
+                        "-DiskNumber",
+                        &disk_number.to_string(),
+                        "-PartitionNumber",
+                        &p.number.to_string(),
+                        "-DriveLetter",
+                        &drive_letter.to_string(),
                     ],
                 )
                 .map_err(|e| ExecutionError::Failed(e.to_string()))?;

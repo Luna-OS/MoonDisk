@@ -70,12 +70,21 @@ impl Default for AppState {
 #[derive(Debug, Serialize)]
 pub struct AppInfo {
     pub version: String,
+    /// "windows" or "linux" — lets the frontend hide platform-only actions
+    /// (e.g. drive letters only exist on Windows) without guessing from
+    /// other data.
+    pub platform: &'static str,
 }
 
 #[tauri::command]
 pub fn app_info() -> AppInfo {
     AppInfo {
         version: env!("CARGO_PKG_VERSION").to_string(),
+        platform: if cfg!(target_os = "windows") {
+            "windows"
+        } else {
+            "linux"
+        },
     }
 }
 

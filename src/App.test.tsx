@@ -40,7 +40,7 @@ const sampleDisk: Disk = {
   ],
 };
 
-function mockBackend(disks: Disk[], info: AppInfo = { version: "0.0.0-test" }) {
+function mockBackend(disks: Disk[], info: AppInfo = { version: "0.0.0-test", platform: "linux" }) {
   mockedInvoke.mockImplementation((cmd) => {
     if (cmd === "app_info") return Promise.resolve(info);
     if (cmd === "disks_list") return Promise.resolve(disks);
