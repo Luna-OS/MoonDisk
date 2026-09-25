@@ -8,21 +8,21 @@ use thiserror::Error;
 
 #[derive(Debug, Error, PartialEq, Eq)]
 pub enum ValidationError {
-    #[error("Datenträger ist schreibgeschützt")]
+    #[error("the disk is read-only")]
     DiskReadOnly,
-    #[error("Partition wurde nicht gefunden")]
+    #[error("partition not found")]
     PartitionNotFound,
-    #[error("kein ausreichender nicht zugewiesener Speicher an dieser Stelle")]
+    #[error("not enough unallocated space at this position")]
     NoFreeSpace,
-    #[error("Anfang oder Größe ist nicht auf 1 MiB ausgerichtet")]
+    #[error("start or size is not aligned to 1 MiB")]
     Alignment,
-    #[error("Größe unterschreitet die Mindestgröße")]
+    #[error("size is below the minimum")]
     SizeTooSmall,
-    #[error("dieses Dateisystem unterstützt diese Aktion nicht")]
+    #[error("this file system does not support this action")]
     FilesystemUnsupported,
-    #[error("Label ist ungültig oder zu lang")]
+    #[error("the label is invalid or too long")]
     InvalidLabel,
-    #[error("Laufwerksbuchstabe muss ein einzelner Buchstabe A-Z sein")]
+    #[error("the drive letter must be a single letter A-Z")]
     InvalidDriveLetter,
 }
 

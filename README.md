@@ -1,33 +1,29 @@
 # MoonDisk
 
-> Deine Laufwerke. Sicher im Mondlicht.
-> _Your disks, safely under the moon._
+> Your disks, safely under the moon.
 
-MoonDisk ist ein moderner, quelloffener Partitionsmanager für Windows und
-Linux.
+MoonDisk is a modern, open-source partition manager for Windows and Linux.
 
-## Funktionsumfang
+## Features
 
-- Datenträger- und Partitionsübersicht (GPT/MBR, NTFS/FAT32/exFAT/ext2-4/
-  Btrfs/XFS/Swap)
-- Partition erstellen, löschen, formatieren, Label ändern
-- Sicherheitsdialog für kritische Aktionen (Löschen/Formatieren)
+- Overview of disks and partitions (GPT/MBR, NTFS/FAT32/exFAT/ext2-4/Btrfs/XFS/Swap)
+- Create partitions with a chosen size, file system, label and (on Windows) drive letter
+- Format and delete partitions, change labels and drive letters
+- Confirmation dialog for destructive actions (delete/format)
 
 ## Installation
 
-Fertige Installationspakete für Windows (`.exe`) und Linux (`.deb`/`.rpm`)
-gibt es unter [Releases](https://github.com/Luna-OS/MoonDisk/releases).
+Ready-to-use installers for Windows (`.exe`) and Linux (`.deb`/`.rpm`) are available on the
+[Releases](https://github.com/Luna-OS/MoonDisk/releases) page.
 
-Unter Windows fordert MoonDisk beim Start Administratorrechte an (UAC-
-Abfrage) – Partitionsoperationen über PowerShell/Storage benötigen das.
+On Windows, MoonDisk asks for administrator rights when it starts (UAC prompt) — partition
+operations through PowerShell's Storage module require them.
 
-**Sicherheitshinweis:** MoonDisk verändert echte Datenträger. Erstellen,
-Löschen, Formatieren und Label-Änderungen von Partitionen können zu
-unwiderruflichem Datenverlust führen, auch auf der System-, Boot- oder
-EFI-Partition, wenn die Auswahl falsch ist oder ein Fehler auftritt.
-Erstelle vor jeder Aktion an echten Daten ein Backup.
+**Warning:** MoonDisk modifies real disks. Creating, deleting, formatting and relabeling
+partitions can cause permanent data loss — including on system, boot or EFI partitions — if
+the wrong target is selected or something goes wrong. Back up your data before every change.
 
-## Lizenz
+## License
 
-Diese Repository steht aktuell unter der [MIT-Lizenz](LICENSE). Ein Wechsel
-zu GPL-3.0-or-later ist vorgesehen, aber noch nicht umgesetzt.
+This repository is currently licensed under the [MIT License](LICENSE). A move to
+GPL-3.0-or-later is planned but not done yet.

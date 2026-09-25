@@ -91,7 +91,7 @@ impl DiskInventory for WindowsDiskProvider {
             return Ok(Vec::new());
         }
         let parsed: Vec<PsDisk> = serde_json::from_str(trimmed)
-            .map_err(|e| InventoryError::ReadFailed(format!("PowerShell-Ausgabe ungültig: {e}")))?;
+            .map_err(|e| InventoryError::ReadFailed(format!("invalid PowerShell output: {e}")))?;
 
         Ok(parsed.into_iter().map(to_disk).collect())
     }
@@ -185,7 +185,7 @@ fn to_disk(d: PsDisk) -> Disk {
 
     Disk {
         id,
-        display_name: format!("Datenträger {}", d.number),
+        display_name: format!("Disk {}", d.number),
         vendor: d.manufacturer.unwrap_or_default(),
         model: d.model.or(d.friendly_name).unwrap_or_default(),
         serial: d.serial_number,

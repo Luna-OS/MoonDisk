@@ -15,7 +15,7 @@ export function formatBytes(value: string): string {
     display = Number(bytes) / 1024 ** unitIndex;
   }
   const precision = unitIndex === 0 ? 0 : 1;
-  return `${display.toLocaleString("de-DE", {
+  return `${display.toLocaleString("en-US", {
     minimumFractionDigits: precision,
     maximumFractionDigits: precision,
   })} ${units[unitIndex]}`;

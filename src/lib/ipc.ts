@@ -1,9 +1,8 @@
 /**
  * Typed wrappers around every Tauri command MoonDisk exposes. This is the
- * *only* file that calls `@tauri-apps/api/core`'s `invoke` — see
- * docs/architecture.md §7 ("Keine direkten Netzwerkzugriffe" /
- * "keine Geschäftslogik im Frontend"). Components import from here, never
- * from `@tauri-apps/api` directly.
+ * *only* file that calls `@tauri-apps/api/core`'s `invoke`: no direct
+ * network access and no business logic in the frontend. Components import
+ * from here, never from `@tauri-apps/api` directly.
  */
 import { invoke } from "@tauri-apps/api/core";
 import type { AppInfo, Disk, OperationRequest } from "@/types/models";

@@ -1,42 +1,43 @@
-import { useCallback, useEffect, useState } from "react";
-import type { AppInfo, Disk, FileSystem, OperationRequest, Segment } from "@/types/models";
+import { useCallback, useEffect, useState, type ReactNode } from "react";
+import type { AppInfo, BusType, Disk, OperationRequest, Partition, Segment } from "@/types/models";
+import { hasFlag, PartitionFlags } from "@/types/models";
 import { executeOperation, getAppInfo, listDisks } from "@/lib/ipc";
-import { operationRisk } from "@/types/models";
-import { bytesValue, formatBytes } from "@/lib/format";
-import { alignedFreeRange } from "@/lib/alignment";
+import { formatBytes } from "@/lib/format";
+import {
+  diskUsage,
+  fsLabel,
+  kindLabel,
+  segmentColorClass,
+  segmentId,
+  segmentLabel,
+} from "@/lib/segments";
 import { PartitionBar } from "@/components/PartitionBar";
+import { PartitionActions } from "@/components/PartitionActions";
+import { FreeSpaceActions } from "@/components/FreeSpaceActions";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
+import { MoonPhase } from "@/components/MoonPhase";
+import { Sky } from "@/components/Sky";
+import { AlertIcon, CheckIcon, ChevronIcon, CloseIcon, RefreshIcon } from "@/components/icons";
 
-const LINUX_FS_OPTIONS: FileSystem[] = [
-  "ext4",
-  "btrfs",
-  "xfs",
-  "ext3",
-  "ext2",
-  "ntfs",
-  "exFat",
-  "fat32",
-];
-// Windows can only format these without extra software.
-const WINDOWS_FS_OPTIONS: FileSystem[] = ["ntfs", "exFat", "fat32"];
-const fsOptions = (windows: boolean) => (windows ? WINDOWS_FS_OPTIONS : LINUX_FS_OPTIONS);
-// C..Z (24 letters) — A/B are reserved for legacy floppy drives.
-const DRIVE_LETTERS = Array.from({ length: 24 }, (_, i) => String.fromCharCode(67 + i));
-const MIB = 1024n * 1024n;
+const BUS_LABELS: Record<BusType, string> = {
+  sata: "SATA",
+  nvme: "NVMe",
+  usb: "USB",
+  virtual: "Virtual",
+  unknown: "Unknown bus",
+};
 
-function diskSummary(disk: Disk): string {
-  return [
-    `Datenträger: ${disk.displayName} – ${disk.model || disk.vendor || "unbekannt"}`,
-    `Größe: ${formatBytes(disk.size)} · ${disk.table.toUpperCase()}`,
-  ].join("\n");
+function diskModel(disk: Disk): string {
+  return disk.model || disk.vendor || "Unknown model";
 }
 
-function partitionSummary(disk: Disk, p: Extract<Segment, { kind: "partition" }>["value"]): string {
+function partitionSummary(disk: Disk, p: Partition): string {
   return [
-    diskSummary(disk),
-    `Partition: Nr. ${p.number} · ${formatBytes(p.size)} · ${p.fs} ${
-      p.label ? `· Label „${p.label}“` : ""
+    `Disk:      ${disk.displayName} – ${diskModel(disk)}`,
+    `Partition: #${p.number}${p.driveLetter ? ` (${p.driveLetter}:)` : ""}${
+      p.label ? ` “${p.label}”` : ""
     }`,
+    `Size:      ${formatBytes(p.size)} · ${fsLabel(p.fs)}`,
   ].join("\n");
 }
 
@@ -47,6 +48,8 @@ interface PendingCritical {
   targetSummary: string;
 }
 
+type Status = { kind: "success" | "error"; text: string };
+
 export default function App() {
   const [appInfo, setAppInfo] = useState<AppInfo | null>(null);
   const [disks, setDisks] = useState<Disk[]>([]);
@@ -56,7 +59,7 @@ export default function App() {
   const [pendingCritical, setPendingCritical] = useState<PendingCritical | null>(null);
   const [confirmError, setConfirmError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
-  const [status, setStatus] = useState<string | null>(null);
+  const [status, setStatus] = useState<Status | null>(null);
 
   const refresh = useCallback(async () => {
     try {
@@ -80,16 +83,18 @@ export default function App() {
   }, [refresh]);
 
   const selectedDisk = disks.find((d) => d.id === selectedDiskId) ?? null;
+  const windows = appInfo?.platform === "windows";
+  const loading = appInfo === null && loadError === null;
 
   async function runDirect(request: OperationRequest) {
     setBusy(true);
     setStatus(null);
     try {
       await executeOperation({ request });
-      setStatus("Operation erfolgreich ausgeführt.");
+      setStatus({ kind: "success", text: "Done — the disk has been updated." });
       await refresh();
     } catch (e) {
-      setStatus(`Fehlgeschlagen: ${String(e)}`);
+      setStatus({ kind: "error", text: `Failed: ${String(e)}` });
     } finally {
       setBusy(false);
     }
@@ -100,12 +105,10 @@ export default function App() {
     setBusy(true);
     setConfirmError(null);
     try {
-      await executeOperation({
-        request: pendingCritical.request,
-        confirmed: true,
-      });
-      setStatus("Operation erfolgreich ausgeführt.");
+      await executeOperation({ request: pendingCritical.request, confirmed: true });
+      setStatus({ kind: "success", text: "Done — the disk has been updated." });
       setPendingCritical(null);
+      setSelectedSegmentId(null);
       await refresh();
     } catch (e) {
       setConfirmError(String(e));
@@ -114,155 +117,108 @@ export default function App() {
     }
   }
 
-  function askCritical(disk: Disk, request: OperationRequest, action: "delete" | "format") {
-    const partition =
-      request.type === "deletePartition" || request.type === "formatPartition"
-        ? disk.layout
-            .filter((s): s is Extract<Segment, { kind: "partition" }> => s.kind === "partition")
-            .find((s) => s.value.id === request.partition)?.value
-        : undefined;
-    if (!partition) return;
+  function askCritical(disk: Disk, partition: Partition, request: OperationRequest) {
+    const deleting = request.type === "deletePartition";
     setPendingCritical({
       request,
-      title: action === "delete" ? "Partition löschen" : "Partition formatieren",
-      consequence:
-        action === "delete"
-          ? "Die Partition und alle darauf gespeicherten Daten werden unwiderruflich entfernt."
-          : "Alle Daten auf dieser Partition werden unwiderruflich überschrieben.",
+      title: deleting ? "Delete partition" : "Format partition",
+      consequence: deleting
+        ? "The partition and all data on it will be permanently removed."
+        : "All data on this partition will be permanently overwritten.",
       targetSummary: partitionSummary(disk, partition),
     });
     setConfirmError(null);
   }
 
   return (
-    <div className="min-h-screen px-6 py-8">
-      <header className="mx-auto mb-8 max-w-4xl">
-        <h1 className="text-2xl font-semibold text-lavender-400">MoonDisk</h1>
-        <p className="text-sm text-(--md-color-text-muted)">
-          Deine Laufwerke. Sicher im Mondlicht.
-        </p>
-      </header>
+    <div className="relative min-h-screen">
+      <Sky />
 
-      <main className="mx-auto flex max-w-4xl flex-col gap-6">
-        {appInfo && (
-          <div
-            role="status"
-            className="rounded-md border px-4 py-2 text-sm border-(--md-color-warning) text-(--md-color-warning)"
-          >
-            Änderungen wirken auf echte Datenträger. Erstelle vorher ein Backup.
+      <div className="relative z-10 mx-auto flex max-w-6xl flex-col gap-6 px-6 py-7">
+        <header className="flex items-center justify-between gap-4">
+          <div className="flex items-center gap-4">
+            <img
+              src="/moondisk-icon.png"
+              alt=""
+              className="size-14 rounded-2xl shadow-[0_0_44px_-6px_rgb(185_174_251/0.55)] ring-1 ring-lavender-400/30"
+            />
+            <div>
+              <h1 className="md-title text-3xl font-semibold tracking-tight">MoonDisk</h1>
+              <p className="text-sm text-(--md-color-text-muted)">
+                Your disks, safely under the moon.
+              </p>
+            </div>
           </div>
-        )}
-
-        {loadError && (
-          <div
-            role="alert"
-            className="rounded-md border border-(--md-color-error) px-4 py-2 text-sm text-(--md-color-error)"
-          >
-            Datenträger konnten nicht geladen werden: {loadError}
-          </div>
-        )}
-        {status && (
-          <div
-            role="status"
-            className="rounded-md border border-(--md-color-surface-border) px-4 py-2 text-sm"
-          >
-            {status}
-          </div>
-        )}
-
-        <section aria-label="Datenträgerübersicht" className="flex flex-col gap-3">
-          <div className="flex items-center justify-between">
-            <h2 className="text-lg font-medium">Datenträger</h2>
-            <button
-              onClick={() => void refresh()}
-              className="rounded-md border px-3 py-1 text-sm border-(--md-color-surface-border)"
-            >
-              Aktualisieren
+          <div className="flex items-center gap-2">
+            {appInfo && <span className="md-chip">v{appInfo.version}</span>}
+            <button onClick={() => void refresh()} disabled={busy} className="md-btn md-btn-ghost">
+              <RefreshIcon />
+              Refresh
             </button>
           </div>
-          <ul className="flex flex-col gap-2">
-            {disks.map((disk) => (
-              <li key={disk.id}>
-                <button
-                  onClick={() => {
-                    setSelectedDiskId(disk.id);
-                    setSelectedSegmentId(null);
-                  }}
-                  className={`w-full rounded-md border px-4 py-3 text-left bg-(--md-color-surface) border-(--md-color-surface-border) ${
-                    disk.id === selectedDiskId ? "ring-2 ring-(--md-color-focus-ring)" : ""
-                  }`}
-                >
-                  <div className="flex items-center justify-between">
-                    <span className="font-medium">
-                      {disk.displayName} – {disk.model || disk.vendor || "unbekannt"}
-                    </span>
-                    <span className="text-sm text-(--md-color-text-muted)">
-                      {formatBytes(disk.size)}
-                    </span>
-                  </div>
-                  <div className="mt-1 text-xs text-(--md-color-text-muted)">
-                    {disk.bus.toUpperCase()} · {disk.table.toUpperCase()}
-                    {disk.isSystemDisk && " · Systemdatenträger"}
-                    {disk.readOnly && " · schreibgeschützt"}
-                  </div>
-                </button>
-              </li>
-            ))}
-            {disks.length === 0 && !loadError && (
-              <li className="text-sm text-(--md-color-text-muted)">Keine Datenträger gefunden.</li>
-            )}
-          </ul>
-        </section>
+        </header>
 
-        {selectedDisk && (
-          <section aria-label="Partitionsdetails" className="flex flex-col gap-4">
-            <h2 className="text-lg font-medium">Partitionen von {selectedDisk.displayName}</h2>
-            <PartitionBar
-              disk={selectedDisk}
-              selectedId={selectedSegmentId}
-              onSelect={(seg) =>
-                setSelectedSegmentId(
-                  seg.kind === "partition"
-                    ? seg.value.id
-                    : `free-${selectedDisk.layout.indexOf(seg)}`,
-                )
-              }
-            />
-
-            <ul className="flex flex-col gap-3">
-              {selectedDisk.layout.map((seg, i) => {
-                const id = seg.kind === "partition" ? seg.value.id : `free-${i}`;
-                if (id !== selectedSegmentId) return null;
-                if (seg.kind === "unallocated") {
-                  return (
-                    <FreeSpaceActions
-                      key={id}
-                      disk={selectedDisk}
-                      start={seg.value.start}
-                      size={seg.value.size}
-                      busy={busy}
-                      showDriveLetter={appInfo?.platform === "windows"}
-                      onCreate={(req) => void runDirect(req)}
-                    />
-                  );
-                }
-                return (
-                  <PartitionActions
-                    key={id}
-                    partition={seg.value}
-                    busy={busy}
-                    showDriveLetter={appInfo?.platform === "windows"}
-                    onLabel={(req) => void runDirect(req)}
-                    onDriveLetter={(req) => void runDirect(req)}
-                    onFormat={(req) => askCritical(selectedDisk, req, "format")}
-                    onDelete={(req) => askCritical(selectedDisk, req, "delete")}
-                  />
-                );
-              })}
-            </ul>
-          </section>
+        {appInfo && (
+          <Banner tone="warning" icon={<AlertIcon />}>
+            Changes are applied to real disks. Make a backup first.
+          </Banner>
         )}
-      </main>
+        {loadError && (
+          <Banner tone="error" icon={<AlertIcon />}>
+            Could not load disks: {loadError}
+          </Banner>
+        )}
+
+        <div className="grid items-start gap-6 md:grid-cols-[300px_minmax(0,1fr)]">
+          <aside aria-label="Disks" className="flex flex-col gap-3">
+            <h2 className="md-eyebrow px-1">Disks</h2>
+            {loading &&
+              [0, 1].map((i) => <div key={i} className="md-glass md-skeleton h-[106px]" />)}
+            {disks.map((disk) => (
+              <DiskCard
+                key={disk.id}
+                disk={disk}
+                selected={disk.id === selectedDiskId}
+                onSelect={() => {
+                  setSelectedDiskId(disk.id);
+                  setSelectedSegmentId(null);
+                }}
+              />
+            ))}
+            {!loading && disks.length === 0 && !loadError && (
+              <p className="px-1 text-sm text-(--md-color-text-muted)">No disks found.</p>
+            )}
+          </aside>
+
+          <main>
+            {selectedDisk ? (
+              <DiskDetail
+                disk={selectedDisk}
+                windows={windows}
+                busy={busy}
+                selectedSegmentId={selectedSegmentId}
+                onSelectSegment={setSelectedSegmentId}
+                onRun={(req) => void runDirect(req)}
+                onCritical={(partition, req) => askCritical(selectedDisk, partition, req)}
+              />
+            ) : (
+              <EmptyState />
+            )}
+          </main>
+        </div>
+      </div>
+
+      {status && (
+        <div className="fixed right-6 bottom-6 z-20 w-[min(28rem,calc(100vw-3rem))] shadow-[0_18px_50px_-12px_rgb(0_0_0/0.8)]">
+          <Banner
+            tone={status.kind}
+            icon={status.kind === "success" ? <CheckIcon /> : <AlertIcon />}
+            onClose={() => setStatus(null)}
+          >
+            {status.text}
+          </Banner>
+        </div>
+      )}
 
       <ConfirmDialog
         open={pendingCritical !== null}
@@ -281,272 +237,243 @@ export default function App() {
   );
 }
 
-function PartitionActions({
-  partition,
-  busy,
-  showDriveLetter,
-  onLabel,
-  onDriveLetter,
-  onFormat,
-  onDelete,
+const BANNER_TONES = {
+  warning: "border-warning-400/35 bg-warning-400/8 text-warning-400",
+  error: "border-error-500/40 bg-[#2a1530]/95 text-[#f28b92]",
+  success: "border-mint-400/35 bg-[#132a33]/95 text-mint-400",
+};
+
+function Banner({
+  tone,
+  icon,
+  onClose,
+  children,
 }: {
-  partition: Extract<Segment, { kind: "partition" }>["value"];
-  busy: boolean;
-  showDriveLetter: boolean;
-  onLabel: (req: OperationRequest) => void;
-  onDriveLetter: (req: OperationRequest) => void;
-  onFormat: (req: OperationRequest) => void;
-  onDelete: (req: OperationRequest) => void;
+  tone: keyof typeof BANNER_TONES;
+  icon: ReactNode;
+  onClose?: () => void;
+  children: ReactNode;
 }) {
-  const [label, setLabel] = useState(partition.label ?? "");
-  const [formatFs, setFormatFs] = useState<FileSystem>(fsOptions(showDriveLetter)[0]);
-  const [driveLetter, setDriveLetter] = useState(partition.driveLetter ?? DRIVE_LETTERS[0]);
-
   return (
-    <li className="flex flex-col gap-3 rounded-md border border-(--md-color-surface-border) bg-(--md-color-surface) p-4">
-      <div className="text-sm font-medium">
-        Partition {partition.number} · {formatBytes(partition.size)} · {partition.fs}
-      </div>
-
-      <div className="flex flex-wrap items-end gap-2">
-        <label className="flex flex-col text-xs">
-          Label
-          <input
-            value={label}
-            onChange={(e) => setLabel(e.target.value)}
-            className="rounded border px-2 py-1 border-(--md-color-surface-border) bg-(--md-color-bg)"
-          />
-        </label>
+    <div
+      role={tone === "error" ? "alert" : "status"}
+      className={`flex items-start gap-3 rounded-xl border px-4 py-2.5 text-sm backdrop-blur-md ${BANNER_TONES[tone]}`}
+    >
+      <span className="mt-0.5">{icon}</span>
+      <span className="min-w-0 flex-1 break-words">{children}</span>
+      {onClose && (
         <button
-          disabled={busy || label === (partition.label ?? "")}
-          onClick={() => onLabel({ type: "setLabel", partition: partition.id, label })}
-          className="rounded-md border px-3 py-1 text-sm border-(--md-color-surface-border) disabled:opacity-40"
+          onClick={onClose}
+          aria-label="Dismiss"
+          className="mt-0.5 rounded-md opacity-70 hover:opacity-100"
         >
-          Label speichern
+          <CloseIcon />
         </button>
-      </div>
-
-      {showDriveLetter && (
-        <div className="flex flex-wrap items-end gap-2">
-          <label className="flex flex-col text-xs">
-            Laufwerksbuchstabe
-            <select
-              value={driveLetter}
-              onChange={(e) => setDriveLetter(e.target.value)}
-              className="rounded border px-2 py-1 border-(--md-color-surface-border) bg-(--md-color-bg)"
-            >
-              {DRIVE_LETTERS.map((l) => (
-                <option key={l} value={l}>
-                  {l}:
-                </option>
-              ))}
-            </select>
-          </label>
-          <button
-            disabled={busy || driveLetter === partition.driveLetter}
-            onClick={() =>
-              onDriveLetter({
-                type: "setDriveLetter",
-                partition: partition.id,
-                driveLetter,
-              })
-            }
-            className="rounded-md border px-3 py-1 text-sm border-(--md-color-surface-border) disabled:opacity-40"
-          >
-            {partition.driveLetter ? "Ändern" : "Zuweisen"}
-          </button>
-        </div>
       )}
-
-      <div className="flex flex-wrap items-end gap-2">
-        <label className="flex flex-col text-xs">
-          Neu formatieren als
-          <select
-            value={formatFs}
-            onChange={(e) => setFormatFs(e.target.value as FileSystem)}
-            className="rounded border px-2 py-1 border-(--md-color-surface-border) bg-(--md-color-bg)"
-          >
-            {fsOptions(showDriveLetter).map((fs) => (
-              <option key={fs} value={fs}>
-                {fs}
-              </option>
-            ))}
-          </select>
-        </label>
-        <button
-          disabled={busy}
-          onClick={() =>
-            onFormat({
-              type: "formatPartition",
-              partition: partition.id,
-              filesystem: formatFs,
-              label: label || null,
-            })
-          }
-          className="rounded-md border px-3 py-1 text-sm border-(--md-color-warning) text-(--md-color-warning) disabled:opacity-40"
-        >
-          Formatieren …
-        </button>
-        <button
-          disabled={busy}
-          onClick={() => onDelete({ type: "deletePartition", partition: partition.id })}
-          className="rounded-md border px-3 py-1 text-sm border-(--md-color-error) text-(--md-color-error) disabled:opacity-40"
-        >
-          Löschen …
-        </button>
-      </div>
-    </li>
+    </div>
   );
 }
 
-function FreeSpaceActions({
+function DiskCard({
   disk,
-  start,
-  size,
-  busy,
-  onCreate,
-  showDriveLetter,
+  selected,
+  onSelect,
 }: {
   disk: Disk;
-  start: string;
-  size: string;
-  busy: boolean;
-  onCreate: (req: OperationRequest) => void;
-  showDriveLetter: boolean;
+  selected: boolean;
+  onSelect: () => void;
 }) {
-  const [fs, setFs] = useState<FileSystem>(fsOptions(showDriveLetter)[0]);
-  const [label, setLabel] = useState("");
-  const [driveLetter, setDriveLetter] = useState(DRIVE_LETTERS[1]);
+  const usage = diskUsage(disk);
+  return (
+    <button
+      onClick={onSelect}
+      aria-pressed={selected}
+      className={`md-glass flex w-full items-center gap-3 p-4 text-left transition-[border-color,box-shadow] duration-200 ${
+        selected
+          ? "border-lavender-300/60 shadow-[0_0_0_1px_rgb(214_207_253/0.3),0_14px_40px_-14px_rgb(185_174_251/0.55)]"
+          : "hover:border-lavender-400/35"
+      }`}
+    >
+      <MoonPhase fraction={usage.fraction} size={44} />
+      <div className="min-w-0 flex-1">
+        <div className="flex items-baseline justify-between gap-2">
+          <span className="font-semibold">{disk.displayName}</span>
+          <span className="text-xs text-(--md-color-text-muted) tabular-nums">
+            {formatBytes(disk.size)}
+          </span>
+        </div>
+        <div className="truncate text-sm text-(--md-color-text-muted)">{diskModel(disk)}</div>
+        <div className="mt-2 flex flex-wrap gap-1.5">
+          <span className="md-chip">{BUS_LABELS[disk.bus]}</span>
+          <span className="md-chip">
+            {disk.table === "none" ? "No table" : disk.table.toUpperCase()}
+          </span>
+          {disk.isSystemDisk && <span className="md-chip md-chip-warning">System</span>}
+          {disk.readOnly && <span className="md-chip">Read-only</span>}
+        </div>
+      </div>
+    </button>
+  );
+}
 
-  // The free region's own bytes aren't guaranteed to be 1-MiB-aligned
-  // (gaps between existing partitions on a real disk often aren't), but
-  // MoonDisk's own partitions always are, so the maximum usable size has
-  // to be the largest aligned sub-range that fits rather than the free
-  // region's raw byte count.
-  const aligned = alignedFreeRange(start, size);
-  const maxSizeMib = aligned ? bytesValue(aligned.size) / MIB : 0n;
-  const [sizeMib, setSizeMib] = useState(() => maxSizeMib.toString());
-
-  let sizeMibValue: bigint;
-  try {
-    sizeMibValue = BigInt(sizeMib || "-1");
-  } catch {
-    sizeMibValue = -1n;
-  }
-  const sizeValid = aligned !== null && sizeMibValue >= 1n && sizeMibValue <= maxSizeMib;
-  const chosenSizeBytes = sizeValid ? (sizeMibValue * MIB).toString() : null;
+function DiskDetail({
+  disk,
+  windows,
+  busy,
+  selectedSegmentId,
+  onSelectSegment,
+  onRun,
+  onCritical,
+}: {
+  disk: Disk;
+  windows: boolean;
+  busy: boolean;
+  selectedSegmentId: string | null;
+  onSelectSegment: (id: string | null) => void;
+  onRun: (req: OperationRequest) => void;
+  onCritical: (partition: Partition, req: OperationRequest) => void;
+}) {
+  const usage = diskUsage(disk);
+  const partitionCount = disk.layout.filter((s) => s.kind === "partition").length;
 
   return (
-    <li className="flex flex-col gap-3 rounded-md border border-dashed border-(--md-color-surface-border) p-4">
-      <div className="text-sm font-medium">Nicht zugewiesen · {formatBytes(size)}</div>
-      <div className="flex flex-wrap items-end gap-2">
-        <label className="flex flex-col text-xs">
-          Dateisystem
-          <select
-            value={fs}
-            onChange={(e) => setFs(e.target.value as FileSystem)}
-            className="rounded border px-2 py-1 border-(--md-color-surface-border) bg-(--md-color-bg)"
-          >
-            {fsOptions(showDriveLetter).map((f) => (
-              <option key={f} value={f}>
-                {f}
-              </option>
-            ))}
-          </select>
-        </label>
-        <label className="flex flex-col text-xs">
-          Label (optional)
-          <input
-            value={label}
-            onChange={(e) => setLabel(e.target.value)}
-            className="rounded border px-2 py-1 border-(--md-color-surface-border) bg-(--md-color-bg)"
-          />
-        </label>
-        {showDriveLetter && (
-          <label className="flex flex-col text-xs">
-            Laufwerksbuchstabe
-            <select
-              value={driveLetter}
-              onChange={(e) => setDriveLetter(e.target.value)}
-              className="rounded border px-2 py-1 border-(--md-color-surface-border) bg-(--md-color-bg)"
+    <section aria-label="Partitions" className="md-glass flex flex-col gap-5 p-5">
+      <div className="flex items-center gap-4">
+        <MoonPhase fraction={usage.fraction} size={56} />
+        <div className="min-w-0 flex-1">
+          <h2 className="text-xl font-semibold">{disk.displayName}</h2>
+          <p className="truncate text-sm text-(--md-color-text-muted)">
+            {diskModel(disk)}
+            {disk.serial ? ` · ${disk.serial}` : ""}
+          </p>
+        </div>
+      </div>
+
+      <dl className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+        <Stat label="Capacity" value={formatBytes(disk.size)} />
+        <Stat label="Allocated" value={formatBytes(usage.allocated.toString())} />
+        <Stat label="Free" value={formatBytes(usage.free.toString())} />
+        <Stat label="Partitions" value={String(partitionCount)} />
+      </dl>
+
+      <div className="flex flex-col gap-2">
+        <h3 className="md-eyebrow">Layout</h3>
+        <PartitionBar
+          disk={disk}
+          selectedId={selectedSegmentId}
+          onSelect={(_, id) => onSelectSegment(id)}
+        />
+      </div>
+
+      <ul className="flex flex-col gap-2">
+        {disk.layout.map((seg, i) => {
+          const id = segmentId(seg, i);
+          const selected = id === selectedSegmentId;
+          return (
+            <li
+              key={id}
+              className={`md-inset overflow-hidden transition-colors duration-200 ${
+                selected ? "border-lavender-400/40 bg-lavender-400/5" : ""
+              }`}
             >
-              {DRIVE_LETTERS.map((l) => (
-                <option key={l} value={l}>
-                  {l}:
-                </option>
-              ))}
-            </select>
-          </label>
-        )}
-      </div>
+              <SegmentRow
+                seg={seg}
+                selected={selected}
+                onToggle={() => onSelectSegment(selected ? null : id)}
+              />
+              {selected &&
+                (seg.kind === "unallocated" ? (
+                  <FreeSpaceActions
+                    disk={disk}
+                    start={seg.value.start}
+                    size={seg.value.size}
+                    busy={busy}
+                    windows={windows}
+                    onCreate={onRun}
+                  />
+                ) : (
+                  <PartitionActions
+                    partition={seg.value}
+                    busy={busy}
+                    windows={windows}
+                    onRun={onRun}
+                    onFormat={(req) => onCritical(seg.value, req)}
+                    onDelete={(req) => onCritical(seg.value, req)}
+                  />
+                ))}
+            </li>
+          );
+        })}
+      </ul>
+    </section>
+  );
+}
 
-      <div className="flex flex-wrap items-end gap-2">
-        <label className="flex flex-col text-xs">
-          Größe (MiB, max. {maxSizeMib.toString()})
-          <input
-            type="number"
-            min="1"
-            max={maxSizeMib.toString()}
-            step="1"
-            disabled={!aligned}
-            value={sizeMib}
-            onChange={(e) => setSizeMib(e.target.value)}
-            className="w-32 rounded border px-2 py-1 border-(--md-color-surface-border) bg-(--md-color-bg)"
-          />
-        </label>
-        <button
-          type="button"
-          disabled={!aligned}
-          onClick={() => setSizeMib(maxSizeMib.toString())}
-          className="rounded-md border px-3 py-1 text-sm border-(--md-color-surface-border) disabled:opacity-40"
-        >
-          Maximum
-        </button>
-        <span className="text-xs text-(--md-color-text-muted)">
-          {chosenSizeBytes ? `= ${formatBytes(chosenSizeBytes)}` : "ungültige Größe"}
+function Stat({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="md-inset px-3 py-2">
+      <dt className="text-[0.7rem] text-(--md-color-text-muted)">{label}</dt>
+      <dd className="font-semibold tabular-nums">{value}</dd>
+    </div>
+  );
+}
+
+function SegmentRow({
+  seg,
+  selected,
+  onToggle,
+}: {
+  seg: Segment;
+  selected: boolean;
+  onToggle: () => void;
+}) {
+  const free = seg.kind === "unallocated";
+  const p = free ? null : seg.value;
+  const kind = p ? kindLabel(p.kind) : null;
+
+  return (
+    <button
+      onClick={onToggle}
+      aria-expanded={selected}
+      className="flex w-full items-center gap-3 px-4 py-3 text-left hover:bg-white/3"
+    >
+      <span className={`size-3 shrink-0 rounded-full ${segmentColorClass(seg)}`} />
+      <span className="min-w-0 flex-1">
+        <span className="block truncate text-sm font-medium">
+          {p?.driveLetter ? `${p.driveLetter}: ` : ""}
+          {segmentLabel(seg)}
         </span>
-      </div>
+        <span className="block text-xs text-(--md-color-text-muted)">
+          {p ? `Partition ${p.number} · ${fsLabel(p.fs)}` : "Create a new partition here"}
+        </span>
+      </span>
+      <span className="hidden flex-wrap justify-end gap-1.5 sm:flex">
+        {kind && <span className="md-chip">{kind}</span>}
+        {p && hasFlag(p.flags, PartitionFlags.SYSTEM) && (
+          <span className="md-chip md-chip-warning">System</span>
+        )}
+        {p && hasFlag(p.flags, PartitionFlags.BOOT) && <span className="md-chip">Boot</span>}
+        {free && <span className="md-chip md-chip-mint">Free</span>}
+      </span>
+      <span className="w-20 text-right text-sm text-(--md-color-text-muted) tabular-nums">
+        {formatBytes(seg.value.size)}
+      </span>
+      <ChevronIcon open={selected} />
+    </button>
+  );
+}
 
-      <div className="flex flex-wrap items-end gap-2">
-        <button
-          disabled={busy || !chosenSizeBytes}
-          onClick={() => {
-            if (!aligned || !chosenSizeBytes) return;
-            onCreate({
-              type: "createPartition",
-              disk: disk.id,
-              start: aligned.start,
-              size: chosenSizeBytes,
-              filesystem: fs,
-              label: label || null,
-              driveLetter: showDriveLetter ? driveLetter : null,
-            });
-          }}
-          className="rounded-md border px-3 py-1 text-sm border-(--md-color-primary) text-(--md-color-primary) disabled:opacity-40"
-        >
-          Partition erstellen
-        </button>
+function EmptyState() {
+  return (
+    <div className="md-glass flex min-h-80 flex-col items-center justify-center gap-4 p-10 text-center">
+      <MoonPhase fraction={0.4} size={88} />
+      <div className="flex flex-col gap-1">
+        <h2 className="text-lg font-semibold">Pick a disk</h2>
+        <p className="max-w-sm text-sm text-(--md-color-text-muted)">
+          Choose a disk on the left to see its partitions. The moon next to each disk shows how much
+          of it is already allocated.
+        </p>
       </div>
-      {chosenSizeBytes ? (
-        <p className="text-xs text-(--md-color-text-muted)">
-          Risiko:{" "}
-          {operationRisk({
-            type: "createPartition",
-            disk: disk.id,
-            start: aligned!.start,
-            size: chosenSizeBytes,
-            filesystem: fs,
-            label: null,
-            driveLetter: null,
-          })}
-        </p>
-      ) : (
-        <p className="text-xs text-(--md-color-text-muted)">
-          {aligned
-            ? "Größe muss zwischen 1 und dem verfügbaren Maximum liegen."
-            : "Bereich ist kleiner als 1 MiB nach Ausrichtung – zu klein für eine Partition."}
-        </p>
-      )}
-    </li>
+    </div>
   );
 }

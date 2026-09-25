@@ -14,7 +14,7 @@
 //! no mock/simulated mode.
 
 #[cfg(not(any(target_os = "linux", target_os = "windows")))]
-compile_error!("MoonDisk unterstützt nur Windows und Linux");
+compile_error!("MoonDisk only supports Windows and Linux");
 
 use crate::models::{Disk, DiskId};
 use crate::operations::{
@@ -121,7 +121,7 @@ pub fn execute_operation(
     let _guard = state
         .exec_lock
         .lock()
-        .map_err(|_| "interner Zustand beschädigt".to_string())?;
+        .map_err(|_| "internal state is corrupted".to_string())?;
 
     let disk = state
         .inventory()

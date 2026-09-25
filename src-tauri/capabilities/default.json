@@ -1,7 +1,7 @@
 {
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "default",
-  "description": "Nur Tauri-Core-Standardrechte, keine Plugin-Berechtigungen. Die App-eigenen Commands (app_info, disks_list, disk_get, execute_operation, siehe src-tauri/src/commands/) sind keine Plugin-Commands und brauchen daher keinen eigenen Permission-Eintrag.",
+  "description": "Tauri core default permissions only, no plugin permissions. The app's own commands (app_info, disks_list, disk_get, execute_operation, see src-tauri/src/commands/) are not plugin commands and need no permission entry of their own.",
   "windows": ["main"],
   "permissions": ["core:default"]
 }

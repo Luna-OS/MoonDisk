@@ -38,7 +38,7 @@ const noDirectNetworkAccess = {
       {
         selector: "JSXAttribute[name.name='dangerouslySetInnerHTML']",
         message:
-          "dangerouslySetInnerHTML ist verboten (siehe docs/architecture.md §7). Freitext wie Labels muss immer escaped bleiben.",
+          "dangerouslySetInnerHTML is not allowed. Free text such as labels must always stay escaped.",
       },
     ],
   },

@@ -58,9 +58,7 @@ impl DiskInventory for LinuxDiskProvider {
             .args(["--json", "--bytes", "--output-all", "--paths"])
             .env("LC_ALL", "C")
             .output()
-            .map_err(|e| {
-                InventoryError::ReadFailed(format!("lsblk konnte nicht gestartet werden: {e}"))
-            })?;
+            .map_err(|e| InventoryError::ReadFailed(format!("could not start lsblk: {e}")))?;
 
         if !output.status.success() {
             return Err(InventoryError::ReadFailed(format!(
@@ -70,7 +68,7 @@ impl DiskInventory for LinuxDiskProvider {
         }
 
         let parsed: LsblkOutput = serde_json::from_slice(&output.stdout)
-            .map_err(|e| InventoryError::ReadFailed(format!("lsblk-Ausgabe ungültig: {e}")))?;
+            .map_err(|e| InventoryError::ReadFailed(format!("invalid lsblk output: {e}")))?;
 
         let system_source = system_disk_source_linux();
 
@@ -207,7 +205,7 @@ fn to_disk(dev: LsblkDevice, index: usize, system_source: Option<&str>) -> Disk 
 
     Disk {
         id,
-        display_name: format!("Datenträger {index}"),
+        display_name: format!("Disk {index}"),
         vendor: clean_vendor_model(dev.vendor),
         model: clean_vendor_model(dev.model),
         serial: dev.serial,

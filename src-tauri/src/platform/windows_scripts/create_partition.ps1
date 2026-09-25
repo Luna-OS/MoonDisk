@@ -65,7 +65,7 @@ if ($DriveLetter -ne '') {
     Add-PartitionAccessPath -DiskNumber $DiskNumber -PartitionNumber $number -AccessPath "${letter}:\"
     $after = Get-Partition -DiskNumber $DiskNumber -PartitionNumber $number
     if ([string]$after.DriveLetter -ne $letter) {
-        throw "Partition erstellt, aber Laufwerksbuchstabe ${letter}: wurde nicht zugewiesen (ist er schon belegt?)"
+        throw "Partition created, but drive letter ${letter}: could not be assigned (is it already in use?)"
     }
 }
 

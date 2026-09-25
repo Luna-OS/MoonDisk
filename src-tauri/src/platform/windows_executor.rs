@@ -157,7 +157,7 @@ fn disk_number_from_id(id: &str) -> Result<u32, ExecutionError> {
     id.rsplit("PhysicalDrive")
         .next()
         .and_then(|s| s.parse().ok())
-        .ok_or_else(|| ExecutionError::Failed(format!("ungültige Datenträger-ID: {id}")))
+        .ok_or_else(|| ExecutionError::Failed(format!("invalid disk ID: {id}")))
 }
 
 fn windows_fs_name(fs: FileSystem) -> Result<&'static str, ExecutionError> {
@@ -166,7 +166,7 @@ fn windows_fs_name(fs: FileSystem) -> Result<&'static str, ExecutionError> {
         FileSystem::Fat32 => Ok("FAT32"),
         FileSystem::ExFat => Ok("exFAT"),
         _ => Err(ExecutionError::NotImplemented(
-            "Windows kann dieses Dateisystem nicht ohne Zusatzsoftware formatieren".into(),
+            "Windows cannot format this file system without extra software".into(),
         )),
     }
 }

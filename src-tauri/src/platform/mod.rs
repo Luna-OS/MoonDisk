@@ -62,7 +62,7 @@ pub fn run_powershell_script(script: &str, params: &[&str]) -> Result<String, st
 
     if !output.status.success() {
         return Err(std::io::Error::other(format!(
-            "PowerShell endete mit Fehler: {}",
+            "PowerShell failed: {}",
             String::from_utf8_lossy(&output.stderr)
         )));
     }
@@ -105,11 +105,11 @@ pub(crate) fn usable_range(disk_size: u64, table: PartitionTable) -> (u64, u64) 
 
 #[derive(Debug, Error)]
 pub enum InventoryError {
-    #[error("Datenträger {0} wurde nicht gefunden")]
+    #[error("disk {0} not found")]
     DiskNotFound(DiskId),
-    #[error("Datenträgerinformationen konnten nicht gelesen werden: {0}")]
+    #[error("could not read disk information: {0}")]
     ReadFailed(String),
-    #[error("nicht unterstützt auf dieser Plattform")]
+    #[error("not supported on this platform")]
     Unsupported,
 }
 

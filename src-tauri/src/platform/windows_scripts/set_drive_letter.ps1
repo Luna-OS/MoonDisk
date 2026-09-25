@@ -19,7 +19,7 @@ if ([string]$partition.DriveLetter -match '^[A-Za-z]$') {
 
 $after = Get-Partition -DiskNumber $DiskNumber -PartitionNumber $PartitionNumber
 if ([string]$after.DriveLetter -ne $letter) {
-    throw "Laufwerksbuchstabe ${letter}: wurde nicht zugewiesen (ist er schon belegt?)"
+    throw "Drive letter ${letter}: could not be assigned (is it already in use?)"
 }
 
 Write-Output 'OK'

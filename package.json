@@ -1,8 +1,8 @@
 {
   "name": "moondisk",
   "private": true,
-  "version": "0.2.9",
-  "description": "MoonDisk – Deine Laufwerke. Sicher im Mondlicht.",
+  "version": "0.2.10",
+  "description": "MoonDisk – your disks, safely under the moon.",
   "license": "GPL-3.0-or-later",
   "type": "module",
   "scripts": {

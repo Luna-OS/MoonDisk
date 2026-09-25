@@ -1,7 +1,7 @@
 [package]
 name = "moondisk"
-version = "0.2.9"
-description = "MoonDisk – Deine Laufwerke. Sicher im Mondlicht. Ein lokaler, quelloffener Partitionsmanager."
+version = "0.2.10"
+description = "MoonDisk – your disks, safely under the moon. A local, open-source partition manager."
 authors = ["MoonDisk contributors"]
 license = "GPL-3.0-or-later"
 repository = "https://github.com/Luna-OS/MoonDisk"

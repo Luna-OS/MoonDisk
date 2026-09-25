@@ -11,15 +11,15 @@ use thiserror::Error;
 
 #[derive(Debug, Error)]
 pub enum ExecutionError {
-    #[error("Bestätigung fehlt oder ist ungültig")]
+    #[error("confirmation is missing or invalid")]
     ConfirmationMissing,
-    #[error("Validierung fehlgeschlagen: {0}")]
+    #[error("validation failed: {0}")]
     ValidationFailed(#[from] super::ValidationError),
-    #[error("Ausführung fehlgeschlagen: {0}")]
+    #[error("operation failed: {0}")]
     Failed(String),
-    #[error("diese Operation ist noch nicht implementiert: {0}")]
+    #[error("not supported yet: {0}")]
     NotImplemented(String),
-    #[error("Lesezugriff auf den Datenträger fehlgeschlagen: {0}")]
+    #[error("could not read the disk: {0}")]
     Inventory(#[from] crate::platform::InventoryError),
 }
 

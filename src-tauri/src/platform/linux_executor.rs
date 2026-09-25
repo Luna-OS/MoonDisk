@@ -80,16 +80,16 @@ impl DiskOperationExecutor for LinuxDiskExecutor {
                 set_label(&dev, p.fs, label)
             }
             OperationRequest::SetDriveLetter { .. } => Err(ExecutionError::NotImplemented(
-                "Laufwerksbuchstaben gibt es unter Linux nicht".into(),
+                "drive letters do not exist on Linux".into(),
             )),
         }
     }
 }
 
 fn run(cmd: &mut Command) -> Result<Output, ExecutionError> {
-    let out = cmd.output().map_err(|e| {
-        ExecutionError::Failed(format!("Prozess konnte nicht gestartet werden: {e}"))
-    })?;
+    let out = cmd
+        .output()
+        .map_err(|e| ExecutionError::Failed(format!("could not start process: {e}")))?;
     if !out.status.success() {
         return Err(ExecutionError::Failed(format!(
             "{}: {}",
@@ -132,7 +132,7 @@ fn create_partition(
     let end = start
         .checked_add(size)
         .and_then(|e| e.checked_sub(ByteSize(1)))
-        .ok_or_else(|| ExecutionError::Failed("Größenberechnung übergelaufen".into()))?;
+        .ok_or_else(|| ExecutionError::Failed("size calculation overflowed".into()))?;
     // GPT partition name; parted accepts an empty name via "" but MoonDisk
     // always supplies at least a placeholder so scripts/tools downstream
     // never see a blank field.
@@ -229,7 +229,7 @@ fn format_partition(
         }
         FileSystem::Unformatted | FileSystem::Unknown => {
             return Err(ExecutionError::NotImplemented(
-                "Formatieren in dieses Dateisystem wird nicht unterstützt".into(),
+                "formatting to this file system is not supported".into(),
             ));
         }
     }
@@ -262,7 +262,7 @@ fn set_label(
         }
         _ => {
             return Err(ExecutionError::NotImplemented(
-                "Label-Änderung für dieses Dateisystem wird nicht unterstützt".into(),
+                "changing the label is not supported for this file system".into(),
             ));
         }
     }
