@@ -79,8 +79,29 @@ fn uuid_like() -> String {
     format!("{nanos:x}-{:x}", std::process::id())
 }
 
-use crate::models::{Disk, DiskId};
+use crate::models::{Disk, DiskId, PartitionTable};
 use thiserror::Error;
+
+/// No partition may start in the first sectors of a disk (MBR / GPT
+/// protective MBR + primary GPT header) or, on GPT, reach into the last
+/// ones (backup GPT header + entry array). Both are well under 1 MiB, and
+/// Windows and parted both align partitions to 1 MiB anyway, so exactly
+/// 1 MiB is reserved at each end — the same grid as everything else.
+pub(crate) const PARTITION_TABLE_RESERVE: u64 = 1024 * 1024;
+
+/// The byte range `[start, end)` partitions may occupy on a disk of
+/// `disk_size` bytes. A disk with no table yet is treated like GPT, since
+/// that's what MoonDisk initializes it as before creating a partition.
+pub(crate) fn usable_range(disk_size: u64, table: PartitionTable) -> (u64, u64) {
+    let start = PARTITION_TABLE_RESERVE.min(disk_size);
+    let end = match table {
+        PartitionTable::Mbr => disk_size,
+        PartitionTable::Gpt | PartitionTable::None => {
+            disk_size.saturating_sub(PARTITION_TABLE_RESERVE)
+        }
+    };
+    (start, end.max(start))
+}
 
 #[derive(Debug, Error)]
 pub enum InventoryError {
@@ -112,4 +133,36 @@ pub trait DiskInventory: Send + Sync {
 pub enum InventorySource {
     Linux,
     Windows,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    const MIB: u64 = 1024 * 1024;
+
+    #[test]
+    fn usable_range_never_starts_at_byte_zero() {
+        for table in [
+            PartitionTable::Gpt,
+            PartitionTable::Mbr,
+            PartitionTable::None,
+        ] {
+            let (start, _) = usable_range(100 * MIB, table);
+            assert_eq!(start, MIB, "{table:?}");
+        }
+    }
+
+    #[test]
+    fn usable_range_reserves_the_gpt_backup_table_but_not_on_mbr() {
+        assert_eq!(usable_range(100 * MIB, PartitionTable::Gpt).1, 99 * MIB);
+        assert_eq!(usable_range(100 * MIB, PartitionTable::None).1, 99 * MIB);
+        assert_eq!(usable_range(100 * MIB, PartitionTable::Mbr).1, 100 * MIB);
+    }
+
+    #[test]
+    fn usable_range_is_empty_not_inverted_on_a_tiny_disk() {
+        let (start, end) = usable_range(MIB / 2, PartitionTable::Gpt);
+        assert!(end >= start);
+    }
 }

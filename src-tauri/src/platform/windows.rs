@@ -11,25 +11,13 @@
 //! not a verified implementation, until it has been run on real Windows
 //! hardware or a Windows CI runner and someone updates this comment.
 
-use super::{run_powershell_script, DiskInventory, InventoryError, InventorySource};
+use super::{run_powershell_script, usable_range, DiskInventory, InventoryError, InventorySource};
 use crate::models::*;
 use serde::Deserialize;
 
 pub struct WindowsDiskProvider;
 
 const LIST_DISKS_SCRIPT: &str = include_str!("windows_scripts/list_disks.ps1");
-
-/// GPT reserves a secondary header + partition entry array at the very
-/// end of the disk (33 sectors — well under 1 MiB even on 4Kn drives)
-/// that no partition may occupy. `Get-Disk`'s `.Size` is the disk's raw
-/// byte size and does not exclude this region, so treating it as
-/// available free space produces a `New-Partition` request Windows
-/// rejects with "The specified offset is not valid" (StorageWMI 41012) —
-/// caught by a real report, not assumed. Reserving a full, already
-/// MiB-aligned 1 MiB comfortably covers the real reservation on any
-/// sector size and keeps the boundary on the same alignment grid the
-/// rest of partitioning already uses.
-const GPT_BACKUP_RESERVE: u64 = 1024 * 1024;
 
 #[derive(Debug, Deserialize)]
 struct PsDisk {
@@ -130,8 +118,14 @@ fn to_disk(d: PsDisk) -> Disk {
         _ => HealthStatus::Unknown,
     };
 
+    // Get-Disk's `.Size` is the raw byte count, including the partition
+    // table's own sectors at both ends. Free space starting at byte 0 made
+    // MoonDisk send `New-Partition -Offset 0` for an empty disk, which
+    // Windows rejects with "The specified offset is not valid"
+    // (StorageWMI 41012) — caught by a real report, not assumed.
+    let (usable_start, usable_end) = usable_range(d.size, table);
     let mut layout = Vec::new();
-    let mut cursor: u64 = 0;
+    let mut cursor: u64 = usable_start;
     for p in &d.partitions {
         if p.offset > cursor {
             layout.push(Segment::Unallocated {
@@ -180,13 +174,8 @@ fn to_disk(d: PsDisk) -> Disk {
             drive_letter: p.drive_letter.as_ref().and_then(|s| s.chars().next()),
             mountpoints: vec![],
         }));
-        cursor = p.offset + p.size;
+        cursor = cursor.max(p.offset + p.size);
     }
-    let usable_end = if table == PartitionTable::Gpt {
-        d.size.saturating_sub(GPT_BACKUP_RESERVE)
-    } else {
-        d.size
-    };
     if cursor < usable_end {
         layout.push(Segment::Unallocated {
             start: ByteSize(cursor),
@@ -214,28 +203,51 @@ fn to_disk(d: PsDisk) -> Disk {
 
 #[cfg(test)]
 mod tests {
+    use super::super::PARTITION_TABLE_RESERVE;
     use super::*;
 
-    #[test]
-    fn caps_trailing_free_space_below_the_gpt_backup_table_on_gpt_disks() {
-        let d = PsDisk {
+    const MIB: u64 = 1024 * 1024;
+
+    fn gpt_disk(size: u64, partitions: Vec<PsPartition>) -> PsDisk {
+        PsDisk {
             number: 0,
             friendly_name: None,
             manufacturer: None,
             model: None,
             serial_number: None,
             bus_type: None,
-            size: 100 * 1024 * 1024,
+            size,
             logical_sector_size: Some(512),
             partition_style: Some("GPT".into()),
             health_status: None,
             is_read_only: false,
             is_boot: false,
             is_system: false,
-            partitions: vec![PsPartition {
+            partitions,
+        }
+    }
+
+    #[test]
+    fn empty_gpt_disk_offers_free_space_inside_the_partition_table_reserve() {
+        // The exact case from the real report: an initialized GPT disk
+        // with no partitions. Free space used to start at byte 0, which
+        // New-Partition rejects as an invalid offset.
+        let disk = to_disk(gpt_disk(100 * MIB, vec![]));
+        let [Segment::Unallocated { start, size }] = disk.layout.as_slice() else {
+            panic!("expected exactly one free segment, got {:?}", disk.layout);
+        };
+        assert_eq!(start.0, PARTITION_TABLE_RESERVE);
+        assert_eq!(start.0 + size.0, 100 * MIB - PARTITION_TABLE_RESERVE);
+    }
+
+    #[test]
+    fn caps_trailing_free_space_below_the_gpt_backup_table_on_gpt_disks() {
+        let disk = to_disk(gpt_disk(
+            100 * MIB,
+            vec![PsPartition {
                 partition_number: 1,
-                offset: 1024 * 1024,
-                size: 50 * 1024 * 1024,
+                offset: MIB,
+                size: 50 * MIB,
                 drive_letter: None,
                 gpt_type: None,
                 is_boot: false,
@@ -243,18 +255,11 @@ mod tests {
                 file_system: None,
                 file_system_label: None,
             }],
-        };
-        let disk = to_disk(d);
+        ));
         let trailing = disk.layout.last().expect("expected a trailing segment");
         let Segment::Unallocated { start, size } = trailing else {
             panic!("expected the last segment to be unallocated, got {trailing:?}");
         };
-        let end = start.0 + size.0;
-        assert!(
-            end <= 100 * 1024 * 1024 - GPT_BACKUP_RESERVE,
-            "trailing free space (ending at {end}) must not reach into the GPT backup table \
-             region — this is exactly the shape of request New-Partition rejected with \
-             \"The specified offset is not valid\" (StorageWMI 41012)"
-        );
+        assert_eq!(start.0 + size.0, 100 * MIB - PARTITION_TABLE_RESERVE);
     }
 }

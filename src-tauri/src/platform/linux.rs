@@ -4,24 +4,13 @@
 //! user input, and never through a shell (`std::process::Command` execs
 //! the binary directly, so there is no shell to inject into).
 
-use super::{DiskInventory, InventoryError, InventorySource};
+use super::{usable_range, DiskInventory, InventoryError, InventorySource};
 use crate::models::*;
 use crate::security::system_protection::system_disk_source_linux;
 use serde::Deserialize;
 use std::process::Command;
 
 pub struct LinuxDiskProvider;
-
-/// GPT reserves a secondary header + partition entry array at the very
-/// end of the disk (33 sectors — well under 1 MiB even on 4Kn drives)
-/// that no partition may occupy; `lsblk`'s reported device size doesn't
-/// exclude it. Windows' `New-Partition` rejects a request that reaches
-/// into this region outright (a real report caught that, see
-/// `platform::windows::GPT_BACKUP_RESERVE`) and `parted` on Linux is
-/// subject to the same on-disk constraint, so the trailing free-space
-/// segment is capped here too, for the same reason and by the same
-/// already-MiB-aligned amount.
-const GPT_BACKUP_RESERVE: u64 = 1024 * 1024;
 
 // --- `lsblk -J -b -O` JSON shape (only the fields MoonDisk uses) ---
 
@@ -137,8 +126,11 @@ fn to_disk(dev: LsblkDevice, index: usize, system_source: Option<&str>) -> Disk 
     let is_system_disk = system_source.is_some_and(|src| src.starts_with(&path));
 
     let children = dev.children.unwrap_or_default();
+    // lsblk's size is the raw device size, including the partition
+    // table's own sectors at both ends — see `platform::usable_range`.
+    let (usable_start, usable_end) = usable_range(dev.size, table);
     let mut layout = Vec::new();
-    let mut cursor: u64 = 0;
+    let mut cursor: u64 = usable_start;
     for (i, child) in children.iter().enumerate() {
         // lsblk doesn't report each partition's start offset directly in a
         // portable way across util-linux versions; MoonDisk instead lays
@@ -204,13 +196,8 @@ fn to_disk(dev: LsblkDevice, index: usize, system_source: Option<&str>) -> Disk 
             drive_letter: None,
             mountpoints,
         }));
-        cursor = start + size;
+        cursor = cursor.max(start + size);
     }
-    let usable_end = if table == PartitionTable::Gpt {
-        dev.size.saturating_sub(GPT_BACKUP_RESERVE)
-    } else {
-        dev.size
-    };
     if cursor < usable_end {
         layout.push(Segment::Unallocated {
             start: ByteSize(cursor),
@@ -352,18 +339,41 @@ mod tests {
         assert_eq!(extract_partition_number("vda3", "vda"), Some(3));
     }
 
+    const MIB: u64 = 1024 * 1024;
+
+    #[test]
+    fn empty_gpt_disk_offers_free_space_inside_the_partition_table_reserve() {
+        let dev = LsblkDevice {
+            name: "sdz".into(),
+            path: Some("/dev/sdz".into()),
+            size: 100 * MIB,
+            dev_type: "disk".into(),
+            pttype: Some("gpt".into()),
+            ..Default::default()
+        };
+        let disk = to_disk(dev, 0, None);
+        let [Segment::Unallocated { start, size }] = disk.layout.as_slice() else {
+            panic!("expected exactly one free segment, got {:?}", disk.layout);
+        };
+        assert_eq!(start.0, super::super::PARTITION_TABLE_RESERVE);
+        assert_eq!(
+            start.0 + size.0,
+            100 * MIB - super::super::PARTITION_TABLE_RESERVE
+        );
+    }
+
     #[test]
     fn caps_trailing_free_space_below_the_gpt_backup_table_on_gpt_disks() {
         let dev = LsblkDevice {
             name: "sdz".into(),
             path: Some("/dev/sdz".into()),
-            size: 100 * 1024 * 1024,
+            size: 100 * MIB,
             dev_type: "disk".into(),
             pttype: Some("gpt".into()),
             children: Some(vec![LsblkDevice {
                 name: "sdz1".into(),
                 path: Some("/dev/sdz1".into()),
-                size: 50 * 1024 * 1024,
+                size: 50 * MIB,
                 dev_type: "part".into(),
                 ..Default::default()
             }]),
@@ -374,11 +384,9 @@ mod tests {
         let Segment::Unallocated { start, size } = trailing else {
             panic!("expected the last segment to be unallocated, got {trailing:?}");
         };
-        let end = start.0 + size.0;
-        assert!(
-            end <= 100 * 1024 * 1024 - GPT_BACKUP_RESERVE,
-            "trailing free space (ending at {end}) must not reach into the GPT backup table \
-             region — a real New-Partition/parted call there fails"
+        assert_eq!(
+            start.0 + size.0,
+            100 * MIB - super::super::PARTITION_TABLE_RESERVE
         );
     }
 
