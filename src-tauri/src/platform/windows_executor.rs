@@ -36,19 +36,27 @@ impl DiskOperationExecutor for WindowsDiskExecutor {
         let disk_number = disk_number_from_id(&disk.id.0)?;
 
         match req {
-            OperationRequest::CreatePartition { start, size, .. } => {
-                run_powershell_script(
-                    CREATE_PARTITION_SCRIPT,
-                    &[
-                        "-DiskNumber",
-                        &disk_number.to_string(),
-                        "-OffsetBytes",
-                        &start.0.to_string(),
-                        "-SizeBytes",
-                        &size.0.to_string(),
-                    ],
-                )
-                .map_err(|e| ExecutionError::Failed(e.to_string()))?;
+            OperationRequest::CreatePartition {
+                start,
+                size,
+                drive_letter,
+                ..
+            } => {
+                let mut args = vec![
+                    "-DiskNumber".to_string(),
+                    disk_number.to_string(),
+                    "-OffsetBytes".to_string(),
+                    start.0.to_string(),
+                    "-SizeBytes".to_string(),
+                    size.0.to_string(),
+                ];
+                if let Some(l) = drive_letter {
+                    args.push("-DriveLetter".to_string());
+                    args.push(l.to_string());
+                }
+                let arg_refs: Vec<&str> = args.iter().map(String::as_str).collect();
+                run_powershell_script(CREATE_PARTITION_SCRIPT, &arg_refs)
+                    .map_err(|e| ExecutionError::Failed(e.to_string()))?;
             }
             OperationRequest::DeletePartition { partition } => {
                 let p = disk

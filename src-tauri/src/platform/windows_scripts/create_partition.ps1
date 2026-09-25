@@ -6,12 +6,18 @@
 param(
     [Parameter(Mandatory)] [int]    $DiskNumber,
     [Parameter(Mandatory)] [int64]  $OffsetBytes,
-    [Parameter(Mandatory)] [int64]  $SizeBytes
+    [Parameter(Mandatory)] [int64]  $SizeBytes,
+    [string]                        $DriveLetter = ''
 )
 
 $ErrorActionPreference = 'Stop'
 
-New-Partition -DiskNumber $DiskNumber -Offset $OffsetBytes -Size $SizeBytes `
-    -AssignDriveLetter:$false | Out-Null
+if ($DriveLetter -ne '') {
+    New-Partition -DiskNumber $DiskNumber -Offset $OffsetBytes -Size $SizeBytes `
+        -DriveLetter $DriveLetter[0] | Out-Null
+} else {
+    New-Partition -DiskNumber $DiskNumber -Offset $OffsetBytes -Size $SizeBytes `
+        -AssignDriveLetter:$false | Out-Null
+}
 
 Write-Output 'OK'

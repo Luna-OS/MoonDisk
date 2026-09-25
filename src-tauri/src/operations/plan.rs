@@ -14,6 +14,10 @@ pub enum OperationRequest {
         size: ByteSize,
         filesystem: FileSystem,
         label: Option<String>,
+        /// Windows only — the drive letter to assign at creation. Ignored
+        /// on Linux, which has no equivalent concept (see
+        /// `Partition::drive_letter`).
+        drive_letter: Option<char>,
     },
     DeletePartition {
         partition: PartitionId,

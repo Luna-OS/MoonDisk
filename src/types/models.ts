@@ -93,6 +93,8 @@ export type OperationRequest =
       size: ByteSize;
       filesystem: FileSystem;
       label: string | null;
+      /** Windows only; ignored on Linux. */
+      driveLetter: string | null;
     }
   | { type: "deletePartition"; partition: string }
   | { type: "formatPartition"; partition: string; filesystem: FileSystem; label: string | null }

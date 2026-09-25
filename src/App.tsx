@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import type { AppInfo, Disk, FileSystem, OperationRequest, Segment } from "@/types/models";
 import { executeOperation, getAppInfo, listDisks } from "@/lib/ipc";
 import { operationRisk } from "@/types/models";
-import { formatBytes } from "@/lib/format";
+import { bytesValue, formatBytes } from "@/lib/format";
 import { alignedFreeRange } from "@/lib/alignment";
 import { PartitionBar } from "@/components/PartitionBar";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
@@ -10,6 +10,7 @@ import { ConfirmDialog } from "@/components/ConfirmDialog";
 const FS_OPTIONS: FileSystem[] = ["ntfs", "fat32", "exFat", "ext2", "ext3", "ext4", "btrfs", "xfs"];
 // C..Z (24 letters) — A/B are reserved for legacy floppy drives.
 const DRIVE_LETTERS = Array.from({ length: 24 }, (_, i) => String.fromCharCode(67 + i));
+const MIB = 1024n * 1024n;
 
 function diskSummary(disk: Disk): string {
   return [
@@ -228,6 +229,7 @@ export default function App() {
                       start={seg.value.start}
                       size={seg.value.size}
                       busy={busy}
+                      showDriveLetter={appInfo?.platform === "windows"}
                       onCreate={(req) => void runDirect(req)}
                     />
                   );
@@ -391,22 +393,36 @@ function FreeSpaceActions({
   size,
   busy,
   onCreate,
+  showDriveLetter,
 }: {
   disk: Disk;
   start: string;
   size: string;
   busy: boolean;
   onCreate: (req: OperationRequest) => void;
+  showDriveLetter: boolean;
 }) {
   const [fs, setFs] = useState<FileSystem>("ext4");
   const [label, setLabel] = useState("");
+  const [driveLetter, setDriveLetter] = useState(DRIVE_LETTERS[1]);
 
   // The free region's own bytes aren't guaranteed to be 1-MiB-aligned
   // (gaps between existing partitions on a real disk often aren't), but
-  // MoonDisk's own partitions always are, so "use the entire free region"
-  // has to shrink to the largest aligned sub-range that fits rather than
-  // send the raw bytes straight through and have the backend reject them.
+  // MoonDisk's own partitions always are, so the maximum usable size has
+  // to be the largest aligned sub-range that fits rather than the free
+  // region's raw byte count.
   const aligned = alignedFreeRange(start, size);
+  const maxSizeMib = aligned ? bytesValue(aligned.size) / MIB : 0n;
+  const [sizeMib, setSizeMib] = useState(() => maxSizeMib.toString());
+
+  let sizeMibValue: bigint;
+  try {
+    sizeMibValue = BigInt(sizeMib || "-1");
+  } catch {
+    sizeMibValue = -1n;
+  }
+  const sizeValid = aligned !== null && sizeMibValue >= 1n && sizeMibValue <= maxSizeMib;
+  const chosenSizeBytes = sizeValid ? (sizeMibValue * MIB).toString() : null;
 
   return (
     <li className="flex flex-col gap-3 rounded-md border border-dashed border-(--md-color-surface-border) p-4">
@@ -434,39 +450,89 @@ function FreeSpaceActions({
             className="rounded border px-2 py-1 border-(--md-color-surface-border) bg-(--md-color-bg)"
           />
         </label>
+        {showDriveLetter && (
+          <label className="flex flex-col text-xs">
+            Laufwerksbuchstabe
+            <select
+              value={driveLetter}
+              onChange={(e) => setDriveLetter(e.target.value)}
+              className="rounded border px-2 py-1 border-(--md-color-surface-border) bg-(--md-color-bg)"
+            >
+              {DRIVE_LETTERS.map((l) => (
+                <option key={l} value={l}>
+                  {l}:
+                </option>
+              ))}
+            </select>
+          </label>
+        )}
+      </div>
+
+      <div className="flex flex-wrap items-end gap-2">
+        <label className="flex flex-col text-xs">
+          Größe (MiB, max. {maxSizeMib.toString()})
+          <input
+            type="number"
+            min="1"
+            max={maxSizeMib.toString()}
+            step="1"
+            disabled={!aligned}
+            value={sizeMib}
+            onChange={(e) => setSizeMib(e.target.value)}
+            className="w-32 rounded border px-2 py-1 border-(--md-color-surface-border) bg-(--md-color-bg)"
+          />
+        </label>
         <button
-          disabled={busy || !aligned}
+          type="button"
+          disabled={!aligned}
+          onClick={() => setSizeMib(maxSizeMib.toString())}
+          className="rounded-md border px-3 py-1 text-sm border-(--md-color-surface-border) disabled:opacity-40"
+        >
+          Maximum
+        </button>
+        <span className="text-xs text-(--md-color-text-muted)">
+          {chosenSizeBytes ? `= ${formatBytes(chosenSizeBytes)}` : "ungültige Größe"}
+        </span>
+      </div>
+
+      <div className="flex flex-wrap items-end gap-2">
+        <button
+          disabled={busy || !chosenSizeBytes}
           onClick={() => {
-            if (!aligned) return;
+            if (!aligned || !chosenSizeBytes) return;
             onCreate({
               type: "createPartition",
               disk: disk.id,
               start: aligned.start,
-              size: aligned.size,
+              size: chosenSizeBytes,
               filesystem: fs,
               label: label || null,
+              driveLetter: showDriveLetter ? driveLetter : null,
             });
           }}
           className="rounded-md border px-3 py-1 text-sm border-(--md-color-primary) text-(--md-color-primary) disabled:opacity-40"
         >
-          Partition über gesamten freien Bereich erstellen
+          Partition erstellen
         </button>
       </div>
-      {aligned ? (
+      {chosenSizeBytes ? (
         <p className="text-xs text-(--md-color-text-muted)">
           Risiko:{" "}
           {operationRisk({
             type: "createPartition",
             disk: disk.id,
-            start: aligned.start,
-            size: aligned.size,
+            start: aligned!.start,
+            size: chosenSizeBytes,
             filesystem: fs,
             label: null,
+            driveLetter: null,
           })}
         </p>
       ) : (
         <p className="text-xs text-(--md-color-text-muted)">
-          Bereich ist kleiner als 1 MiB nach Ausrichtung – zu klein für eine Partition.
+          {aligned
+            ? "Größe muss zwischen 1 und dem verfügbaren Maximum liegen."
+            : "Bereich ist kleiner als 1 MiB nach Ausrichtung – zu klein für eine Partition."}
         </p>
       )}
     </li>

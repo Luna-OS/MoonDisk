@@ -50,6 +50,7 @@ impl DiskOperationExecutor for LinuxDiskExecutor {
                 size,
                 filesystem,
                 label,
+                drive_letter: _,
             } => create_partition(&disk.0, *start, *size, *filesystem, label.as_deref()),
             OperationRequest::DeletePartition { partition } => {
                 let p = disk

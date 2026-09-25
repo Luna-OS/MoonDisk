@@ -42,7 +42,12 @@ pub fn validate(disk: &Disk, req: &OperationRequest) -> Result<(), ValidationErr
     }
 
     match req {
-        OperationRequest::CreatePartition { start, size, .. } => {
+        OperationRequest::CreatePartition {
+            start,
+            size,
+            drive_letter,
+            ..
+        } => {
             if !is_aligned(*start) || !is_aligned(*size) {
                 return Err(ValidationError::Alignment);
             }
@@ -64,6 +69,11 @@ pub fn validate(disk: &Disk, req: &OperationRequest) -> Result<(), ValidationErr
             });
             if !fits_in_free_region {
                 return Err(ValidationError::NoFreeSpace);
+            }
+            if let Some(l) = drive_letter {
+                if !l.is_ascii_alphabetic() {
+                    return Err(ValidationError::InvalidDriveLetter);
+                }
             }
             Ok(())
         }
@@ -212,6 +222,7 @@ mod tests {
             size: ByteSize(ALIGNMENT * 10),
             filesystem: FileSystem::Ext4,
             label: None,
+            drive_letter: None,
         };
         assert_eq!(validate(&disk, &req), Ok(()));
     }
@@ -225,6 +236,7 @@ mod tests {
             size: ByteSize(ALIGNMENT * 10),
             filesystem: FileSystem::Ext4,
             label: None,
+            drive_letter: None,
         };
         assert_eq!(validate(&disk, &req), Err(ValidationError::NoFreeSpace));
     }
@@ -238,8 +250,26 @@ mod tests {
             size: ByteSize(ALIGNMENT * 10),
             filesystem: FileSystem::Ext4,
             label: None,
+            drive_letter: None,
         };
         assert_eq!(validate(&disk, &req), Err(ValidationError::Alignment));
+    }
+
+    #[test]
+    fn rejects_create_with_a_non_letter_drive_letter() {
+        let disk = sample_disk();
+        let req = OperationRequest::CreatePartition {
+            disk: disk.id.clone(),
+            start: ByteSize(ALIGNMENT * 101),
+            size: ByteSize(ALIGNMENT * 10),
+            filesystem: FileSystem::Ext4,
+            label: None,
+            drive_letter: Some('5'),
+        };
+        assert_eq!(
+            validate(&disk, &req),
+            Err(ValidationError::InvalidDriveLetter)
+        );
     }
 
     #[test]

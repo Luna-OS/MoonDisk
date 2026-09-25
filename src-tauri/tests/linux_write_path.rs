@@ -100,6 +100,7 @@ fn create_format_relabel_and_delete_a_real_partition() {
         size: mib(30),
         filesystem: FileSystem::Ext4,
         label: Some("moondisktest".into()),
+        drive_letter: None,
     };
     executor
         .execute(&create, confirmation)
