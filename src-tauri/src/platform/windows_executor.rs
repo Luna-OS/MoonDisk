@@ -7,7 +7,7 @@
 use super::run_powershell_script;
 use super::windows::WindowsDiskProvider;
 use super::DiskInventory;
-use crate::models::FileSystem;
+use crate::models::{Disk, FileSystem};
 use crate::operations::{
     validate, Confirmation, DiskOperationExecutor, ExecutionError, OperationRequest, RiskLevel,
 };
@@ -150,6 +150,35 @@ impl DiskOperationExecutor for WindowsDiskExecutor {
             }
         }
         Ok(())
+    }
+}
+
+const PREPARE_RAW_WRITE_SCRIPT: &str = include_str!("windows_scripts/prepare_raw_write.ps1");
+const FINISH_RAW_WRITE_SCRIPT: &str = include_str!("windows_scripts/finish_raw_write.ps1");
+
+/// Before writing a whole-disk image: remove all partitions so no mounted
+/// volume blocks raw writes to the physical drive.
+pub fn prepare_raw_write(disk: &Disk) -> Result<(), ExecutionError> {
+    let number = disk_number_from_id(&disk.id.0)?.to_string();
+    run_powershell_script(PREPARE_RAW_WRITE_SCRIPT, &["-DiskNumber", &number])
+        .map_err(|e| ExecutionError::Failed(e.to_string()))?;
+    Ok(())
+}
+
+/// Raw `\\.\PhysicalDriveN` I/O bypasses the file-system cache, so reading
+/// back for verification already hits the device.
+pub fn drop_read_cache(_disk: &Disk) -> Result<(), ExecutionError> {
+    Ok(())
+}
+
+/// After writing a whole-disk image: have Windows pick up its partition
+/// table. Best-effort.
+pub fn finish_raw_write(disk: &Disk) {
+    if let Ok(number) = disk_number_from_id(&disk.id.0) {
+        let _ = run_powershell_script(
+            FINISH_RAW_WRITE_SCRIPT,
+            &["-DiskNumber", &number.to_string()],
+        );
     }
 }
 

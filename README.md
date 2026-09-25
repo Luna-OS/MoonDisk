@@ -9,7 +9,13 @@ MoonDisk is a modern, open-source partition manager for Windows and Linux.
 - Overview of disks and partitions (GPT/MBR, NTFS/FAT32/exFAT/ext2-4/Btrfs/XFS/Swap)
 - Create partitions with a chosen size, file system, label and (on Windows) drive letter
 - Format and delete partitions, change labels and drive letters
-- Confirmation dialog for destructive actions (delete/format)
+- USB writer: write an ISO/IMG file onto a USB stick (e.g. a Linux installer), with
+  verification and live progress
+- Confirmation dialog for destructive actions (delete/format/write image)
+
+The USB writer copies the image byte for byte, like balenaEtcher or Rufus' DD mode. That works
+for Linux ISOs and `.img` files; Windows installer ISOs need Microsoft's Media Creation Tool
+instead — MoonDisk warns when an image won't boot this way.
 
 ## Installation
 

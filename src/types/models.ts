@@ -122,3 +122,25 @@ export interface AppInfo {
    * Windows; Linux uses mountpoints instead. */
   platform: "windows" | "linux";
 }
+
+/** Mirrors `flash::ImageInfo`: a disk image picked for the USB writer. */
+export interface ImageInfo {
+  path: string;
+  name: string;
+  size: ByteSize;
+  /** Starts with an MBR boot signature. Hybrid Linux ISOs and raw `.img`
+   * files do; Windows installer ISOs don't and won't boot when written
+   * raw. */
+  hasBootSector: boolean;
+}
+
+export type FlashPhase = "preparing" | "writing" | "verifying" | "finishing";
+
+/** Payload of the `flash-progress` event. `done`/`total` refer to the
+ * current phase. */
+export interface FlashProgress {
+  phase: FlashPhase;
+  done: ByteSize;
+  total: ByteSize;
+  bytesPerSecond: number;
+}

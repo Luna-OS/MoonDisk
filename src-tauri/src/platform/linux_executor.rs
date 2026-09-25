@@ -16,7 +16,7 @@
 
 use super::linux::LinuxDiskProvider;
 use super::DiskInventory;
-use crate::models::{ByteSize, FileSystem};
+use crate::models::{ByteSize, Disk, FileSystem};
 use crate::operations::{
     validate, Confirmation, DiskOperationExecutor, ExecutionError, OperationRequest, RiskLevel,
 };
@@ -111,6 +111,30 @@ fn partition_device_path(disk_path: &str, number: u32) -> String {
     } else {
         format!("{base}{number}")
     }
+}
+
+/// Before writing a whole-disk image: unmount everything mounted from the
+/// disk (desktops auto-mount USB sticks), so nothing writes to it mid-copy.
+pub fn prepare_raw_write(disk: &Disk) -> Result<(), ExecutionError> {
+    for p in disk.partitions() {
+        for mountpoint in &p.mountpoints {
+            run(Command::new("umount").arg(mountpoint))?;
+        }
+    }
+    Ok(())
+}
+
+/// Drops the kernel's cached pages for the disk so verification reads what
+/// is really on the device, not what was just written into the cache.
+pub fn drop_read_cache(disk: &Disk) -> Result<(), ExecutionError> {
+    run(Command::new("blockdev").args(["--flushbufs", &disk.id.0]))?;
+    Ok(())
+}
+
+/// After writing a whole-disk image: make the kernel pick up the image's
+/// partition table. Best-effort.
+pub fn finish_raw_write(disk: &Disk) {
+    rescan_partition_table(&disk.id.0);
 }
 
 fn rescan_partition_table(disk_path: &str) {

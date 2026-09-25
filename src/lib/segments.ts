@@ -78,3 +78,7 @@ export function diskUsage(disk: Disk): { allocated: bigint; free: bigint; fracti
   const fraction = total > 0n ? Number((allocated * 1000n) / total) / 1000 : 0;
   return { allocated, free, fraction };
 }
+
+export function diskModel(disk: Disk): string {
+  return disk.model || disk.vendor || "Unknown model";
+}

@@ -115,7 +115,11 @@ fn to_disk(dev: LsblkDevice, index: usize, system_source: Option<&str>) -> Disk 
         Some(false) => MediaType::Ssd,
         None => MediaType::Unknown,
     };
-    let table = match dev.pttype.as_deref() {
+    // lsblk's PTTYPE comes from the udev database, like FSTYPE/LABEL below,
+    // and is empty right after MoonDisk writes a whole-disk image until udev
+    // catches up (or always, without a udev daemon). blkid reads the disk.
+    let pttype = dev.pttype.clone().or_else(|| blkid_probe(&path).pttype);
+    let table = match pttype.as_deref() {
         Some("gpt") => PartitionTable::Gpt,
         Some("dos") => PartitionTable::Mbr,
         _ => PartitionTable::None,
@@ -154,7 +158,11 @@ fn to_disk(dev: LsblkDevice, index: usize, system_source: Option<&str>) -> Disk 
         // format/label operation, with no dependency on udev being
         // present or having caught up — this was caught by the real
         // create→format→relabel→delete integration test, not assumed.
-        let (blkid_fstype, blkid_label) = blkid_probe(&child_path(&child.name));
+        let BlkidInfo {
+            fstype: blkid_fstype,
+            label: blkid_label,
+            ..
+        } = blkid_probe(&child_path(&child.name));
         let fs = FileSystem::from_lsblk_fstype(
             blkid_fstype
                 .as_deref()
@@ -288,34 +296,41 @@ fn basename(path: &str) -> &str {
     path.rsplit('/').next().unwrap_or(path)
 }
 
-/// Live-probes a partition's filesystem type and label via `blkid`
-/// (fixed args, read-only). Returns `(None, None)` for an unformatted
-/// partition or if `blkid` isn't available — callers fall back to
-/// whatever lsblk itself reported in that case.
-fn blkid_probe(partition_path: &str) -> (Option<String>, Option<String>) {
+#[derive(Default)]
+struct BlkidInfo {
+    fstype: Option<String>,
+    label: Option<String>,
+    pttype: Option<String>,
+}
+
+/// Live-probes a device's filesystem type, label and partition table type
+/// via `blkid` (fixed args, read-only). Empty for an unformatted partition
+/// or if `blkid` isn't available — callers fall back to whatever lsblk
+/// itself reported in that case.
+fn blkid_probe(device_path: &str) -> BlkidInfo {
     let output = Command::new("blkid")
-        .args(["-o", "export", partition_path])
+        .args(["-o", "export", device_path])
         .env("LC_ALL", "C")
         .output();
     let Ok(output) = output else {
-        return (None, None);
+        return BlkidInfo::default();
     };
     if !output.status.success() {
-        // Exit status 2 means "no recognizable filesystem" — expected and
-        // not an error condition, not logged as one.
-        return (None, None);
+        // Exit status 2 means "nothing recognizable" — expected for an
+        // unformatted partition, not an error condition.
+        return BlkidInfo::default();
     }
-    let text = String::from_utf8_lossy(&output.stdout);
-    let mut fstype = None;
-    let mut label = None;
-    for line in text.lines() {
+    let mut info = BlkidInfo::default();
+    for line in String::from_utf8_lossy(&output.stdout).lines() {
         if let Some(v) = line.strip_prefix("TYPE=") {
-            fstype = Some(v.to_string());
+            info.fstype = Some(v.to_string());
         } else if let Some(v) = line.strip_prefix("LABEL=") {
-            label = Some(v.to_string());
+            info.label = Some(v.to_string());
+        } else if let Some(v) = line.strip_prefix("PTTYPE=") {
+            info.pttype = Some(v.to_string());
         }
     }
-    (fstype, label)
+    info
 }
 
 fn read_sysfs_start(dev_name: &str) -> Option<u64> {

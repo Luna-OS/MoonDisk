@@ -4,6 +4,7 @@ import { hasFlag, PartitionFlags } from "@/types/models";
 import { executeOperation, getAppInfo, listDisks } from "@/lib/ipc";
 import { formatBytes } from "@/lib/format";
 import {
+  diskModel,
   diskUsage,
   fsLabel,
   kindLabel,
@@ -15,9 +16,18 @@ import { PartitionBar } from "@/components/PartitionBar";
 import { PartitionActions } from "@/components/PartitionActions";
 import { FreeSpaceActions } from "@/components/FreeSpaceActions";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
+import { ImageWriter } from "@/components/ImageWriter";
 import { MoonPhase } from "@/components/MoonPhase";
 import { Sky } from "@/components/Sky";
-import { AlertIcon, CheckIcon, ChevronIcon, CloseIcon, RefreshIcon } from "@/components/icons";
+import {
+  AlertIcon,
+  CheckIcon,
+  ChevronIcon,
+  CloseIcon,
+  DiskIcon,
+  RefreshIcon,
+  UsbIcon,
+} from "@/components/icons";
 
 const BUS_LABELS: Record<BusType, string> = {
   sata: "SATA",
@@ -26,10 +36,6 @@ const BUS_LABELS: Record<BusType, string> = {
   virtual: "Virtual",
   unknown: "Unknown bus",
 };
-
-function diskModel(disk: Disk): string {
-  return disk.model || disk.vendor || "Unknown model";
-}
 
 function partitionSummary(disk: Disk, p: Partition): string {
   return [
@@ -50,7 +56,15 @@ interface PendingCritical {
 
 type Status = { kind: "success" | "error"; text: string };
 
+type Tab = "partitions" | "usb";
+
+const TABS: { id: Tab; label: string; icon: ReactNode }[] = [
+  { id: "partitions", label: "Partitions", icon: <DiskIcon /> },
+  { id: "usb", label: "USB writer", icon: <UsbIcon /> },
+];
+
 export default function App() {
+  const [tab, setTab] = useState<Tab>("partitions");
   const [appInfo, setAppInfo] = useState<AppInfo | null>(null);
   const [disks, setDisks] = useState<Disk[]>([]);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -169,7 +183,19 @@ export default function App() {
           </Banner>
         )}
 
-        <div className="grid items-start gap-6 md:grid-cols-[300px_minmax(0,1fr)]">
+        <Tabs tab={tab} onChange={setTab} />
+
+        <div id="panel-usb" role="tabpanel" aria-labelledby="tab-usb" hidden={tab !== "usb"}>
+          <ImageWriter disks={disks} loading={loading} onFinished={() => void refresh()} />
+        </div>
+
+        <div
+          id="panel-partitions"
+          role="tabpanel"
+          aria-labelledby="tab-partitions"
+          hidden={tab !== "partitions"}
+          className="grid items-start gap-6 md:grid-cols-[300px_minmax(0,1fr)]"
+        >
           <aside aria-label="Disks" className="flex flex-col gap-3">
             <h2 className="md-eyebrow px-1">Disks</h2>
             {loading &&
@@ -233,6 +259,49 @@ export default function App() {
         }}
         onConfirm={() => void runCritical()}
       />
+    </div>
+  );
+}
+
+function Tabs({ tab, onChange }: { tab: Tab; onChange: (tab: Tab) => void }) {
+  function focusTab(index: number) {
+    const next = TABS[(index + TABS.length) % TABS.length];
+    onChange(next.id);
+    document.getElementById(`tab-${next.id}`)?.focus();
+  }
+
+  return (
+    <div
+      role="tablist"
+      aria-label="Sections"
+      className="md-glass flex gap-1 self-start rounded-[0.95rem] p-1"
+    >
+      {TABS.map((t, i) => {
+        const selected = t.id === tab;
+        return (
+          <button
+            key={t.id}
+            id={`tab-${t.id}`}
+            role="tab"
+            aria-selected={selected}
+            aria-controls={`panel-${t.id}`}
+            tabIndex={selected ? 0 : -1}
+            onClick={() => onChange(t.id)}
+            onKeyDown={(e) => {
+              if (e.key === "ArrowRight") focusTab(i + 1);
+              if (e.key === "ArrowLeft") focusTab(i - 1);
+            }}
+            className={`inline-flex h-9 items-center gap-2 rounded-[0.7rem] px-4 text-sm font-medium transition-colors duration-200 ${
+              selected
+                ? "bg-lavender-400/15 text-lavender-300 shadow-[inset_0_0_0_1px_rgb(185_174_251/0.35)]"
+                : "text-(--md-color-text-muted) hover:bg-white/4 hover:text-(--md-color-text)"
+            }`}
+          >
+            {t.icon}
+            {t.label}
+          </button>
+        );
+      })}
     </div>
   );
 }

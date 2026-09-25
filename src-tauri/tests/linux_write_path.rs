@@ -26,9 +26,9 @@ struct LoopDevice {
 }
 
 impl LoopDevice {
-    fn attach(size_mib: u64) -> Self {
+    fn attach(size_mib: u64, tag: &str) -> Self {
         let image_path = std::env::temp_dir().join(format!(
-            "moondisk-write-path-test-{}.img",
+            "moondisk-write-path-test-{tag}-{}.img",
             std::process::id()
         ));
         let status = Command::new("dd")
@@ -67,7 +67,7 @@ fn mib(n: u64) -> ByteSize {
 #[test]
 #[ignore]
 fn create_format_relabel_and_delete_a_real_partition() {
-    let loop_dev = LoopDevice::attach(64);
+    let loop_dev = LoopDevice::attach(64, "partitions");
     println!("using throwaway loop device: {}", loop_dev.path);
 
     // A brand-new loop device has no partition table yet; give it one the
@@ -162,4 +162,82 @@ fn create_format_relabel_and_delete_a_real_partition() {
         "real create -> format -> relabel -> delete cycle succeeded on {}",
         loop_dev.path
     );
+}
+
+#[test]
+#[ignore]
+fn writes_a_partitioned_image_onto_a_whole_disk() {
+    use moondisk_lib::flash::{verify_image, write_image};
+    use moondisk_lib::models::PartitionTable;
+    use moondisk_lib::platform::linux_executor::{
+        drop_read_cache, finish_raw_write, prepare_raw_write,
+    };
+    use std::fs::{File, OpenOptions};
+    use std::sync::atomic::AtomicBool;
+
+    // Stand-in for an installer image: 16 MiB of random data with an MBR
+    // and one partition, the way a hybrid Linux ISO carries its own table.
+    let image_path =
+        std::env::temp_dir().join(format!("moondisk-flash-source-{}.img", std::process::id()));
+    let status = Command::new("dd")
+        .args([
+            "if=/dev/urandom",
+            &format!("of={}", image_path.display()),
+            "bs=1M",
+            "count=16",
+        ])
+        .status()
+        .unwrap();
+    assert!(status.success());
+    let status = Command::new("parted")
+        .args(["--script", image_path.to_str().unwrap(), "mklabel", "msdos"])
+        .args(["mkpart", "primary", "1MiB", "15MiB"])
+        .status()
+        .unwrap();
+    assert!(status.success());
+
+    let loop_dev = LoopDevice::attach(64, "flash");
+    let provider = LinuxDiskProvider;
+    let disk_id = DiskId::from(loop_dev.path.clone());
+    let disk = provider.disk(&disk_id).unwrap();
+    assert_eq!(disk.partitions().count(), 0);
+
+    prepare_raw_write(&disk).expect("prepare");
+    let len = std::fs::metadata(&image_path).unwrap().len();
+    let mut target = OpenOptions::new()
+        .read(true)
+        .write(true)
+        .open(&loop_dev.path)
+        .unwrap();
+    let cancel = AtomicBool::new(false);
+    write_image(
+        &mut File::open(&image_path).unwrap(),
+        len,
+        &mut target,
+        &cancel,
+        |_| {},
+    )
+    .expect("write");
+    drop_read_cache(&disk).expect("flush cache");
+    verify_image(
+        &mut File::open(&image_path).unwrap(),
+        len,
+        &mut target,
+        &cancel,
+        |_| {},
+    )
+    .expect("verify");
+    drop(target);
+    finish_raw_write(&disk);
+
+    let disk = provider.disk(&disk_id).unwrap();
+    assert_eq!(disk.table, PartitionTable::Mbr);
+    assert_eq!(
+        disk.partitions().count(),
+        1,
+        "the kernel should see the image's partition"
+    );
+    println!("raw image write + verify succeeded on {}", loop_dev.path);
+
+    let _ = std::fs::remove_file(&image_path);
 }

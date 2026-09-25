@@ -15,6 +15,8 @@ export interface ConfirmDialogProps {
   title: string;
   consequence: string;
   targetSummary: string;
+  /** Text of the confirm button. */
+  confirmLabel?: string;
   busy?: boolean;
   error?: string | null;
   onCancel: () => void;
@@ -26,6 +28,7 @@ export function ConfirmDialog({
   title,
   consequence,
   targetSummary,
+  confirmLabel = "Yes, do it",
   busy,
   error,
   onCancel,
@@ -93,7 +96,7 @@ export function ConfirmDialog({
             disabled={busy}
             className="md-btn md-btn-danger-solid"
           >
-            {busy ? "Working …" : "Yes, do it"}
+            {busy ? "Working …" : confirmLabel}
           </button>
         </div>
       </form>

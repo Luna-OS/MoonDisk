@@ -80,3 +80,24 @@ export const MoonIcon = ({ size = 16 }: { size?: number }) => (
     <path d="M20.5 14.5A8.5 8.5 0 1 1 9.5 3.5a7 7 0 0 0 11 11Z" />
   </Svg>
 );
+
+export const DiskIcon = () => (
+  <Svg>
+    <rect x="3" y="5" width="18" height="14" rx="2" />
+    <path d="M3 13h18M7 16h.01M11 16h.01" />
+  </Svg>
+);
+
+export const UsbIcon = ({ size = 16 }: { size?: number }) => (
+  <Svg size={size}>
+    <rect x="7" y="9" width="10" height="13" rx="2" />
+    <path d="M9 9V3h6v6M11 5.5v.01M13 5.5v.01" />
+  </Svg>
+);
+
+export const DiscIcon = ({ size = 16 }: { size?: number }) => (
+  <Svg size={size}>
+    <circle cx="12" cy="12" r="9" />
+    <circle cx="12" cy="12" r="2.5" />
+  </Svg>
+);

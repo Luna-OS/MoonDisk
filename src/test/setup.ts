@@ -14,3 +14,23 @@ afterEach(() => {
 vi.mock("@tauri-apps/api/core", () => ({
   invoke: vi.fn().mockRejectedValue(new Error("invoke() not mocked for this test")),
 }));
+
+vi.mock("@tauri-apps/api/event", () => ({
+  listen: vi.fn().mockResolvedValue(() => {}),
+}));
+
+// jsdom has no modal <dialog> support yet.
+if (!("showModal" in HTMLDialogElement.prototype)) {
+  Object.defineProperties(HTMLDialogElement.prototype, {
+    showModal: {
+      value(this: HTMLDialogElement) {
+        this.open = true;
+      },
+    },
+    close: {
+      value(this: HTMLDialogElement) {
+        this.open = false;
+      },
+    },
+  });
+}
