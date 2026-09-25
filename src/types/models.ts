@@ -26,6 +26,8 @@ export type FileSystem =
   | "btrfs"
   | "xfs"
   | "linuxSwap"
+  | "apfs"
+  | "hfsPlus"
   | "unformatted"
   | "unknown";
 
@@ -116,11 +118,13 @@ export function operationRisk(req: OperationRequest): RiskLevel {
   }
 }
 
+export type Platform = "windows" | "linux" | "macos";
+
 export interface AppInfo {
   version: string;
-  /** "windows" or "linux" — drive letters (setDriveLetter) only exist on
-   * Windows; Linux uses mountpoints instead. */
-  platform: "windows" | "linux";
+  /** Drive letters (setDriveLetter) only exist on Windows; Linux and macOS
+   * use mountpoints instead. */
+  platform: Platform;
 }
 
 /** Mirrors `flash::ImageInfo`: a disk image picked for the USB writer. */

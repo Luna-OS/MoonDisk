@@ -13,8 +13,8 @@
 //! MoonDisk only ever operates on the platform's actual disks — there is
 //! no mock/simulated mode.
 
-#[cfg(not(any(target_os = "linux", target_os = "windows")))]
-compile_error!("MoonDisk only supports Windows and Linux");
+#[cfg(not(any(target_os = "linux", target_os = "windows", target_os = "macos")))]
+compile_error!("MoonDisk only supports Windows, Linux and macOS");
 
 use crate::flash::{FlashError, ImageInfo, Phase};
 use crate::models::ByteSize;
@@ -53,6 +53,10 @@ fn platform_inventory() -> Box<dyn DiskInventory> {
     {
         Box::new(crate::platform::windows::WindowsDiskProvider)
     }
+    #[cfg(target_os = "macos")]
+    {
+        Box::new(crate::platform::macos::MacDiskProvider)
+    }
 }
 
 impl AppState {
@@ -76,6 +80,10 @@ impl AppState {
         {
             Box::new(crate::platform::windows_executor::WindowsDiskExecutor)
         }
+        #[cfg(target_os = "macos")]
+        {
+            Box::new(crate::platform::macos_executor::MacDiskExecutor)
+        }
     }
 }
 
@@ -88,9 +96,9 @@ impl Default for AppState {
 #[derive(Debug, Serialize)]
 pub struct AppInfo {
     pub version: String,
-    /// "windows" or "linux" — lets the frontend hide platform-only actions
-    /// (e.g. drive letters only exist on Windows) without guessing from
-    /// other data.
+    /// "windows", "linux" or "macos" — lets the frontend hide platform-only
+    /// actions (e.g. drive letters only exist on Windows) without guessing
+    /// from other data.
     pub platform: &'static str,
 }
 
@@ -100,6 +108,8 @@ pub fn app_info() -> AppInfo {
         version: env!("CARGO_PKG_VERSION").to_string(),
         platform: if cfg!(target_os = "windows") {
             "windows"
+        } else if cfg!(target_os = "macos") {
+            "macos"
         } else {
             "linux"
         },

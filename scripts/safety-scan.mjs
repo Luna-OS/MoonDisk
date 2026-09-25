@@ -22,6 +22,8 @@ const rustSrcDir = join(root, "src-tauri", "src");
 const ALLOWED_PROCESS_FILES = new Set([
   "platform/linux.rs",
   "platform/linux_executor.rs",
+  "platform/macos.rs",
+  "platform/macos_executor.rs",
   "platform/mod.rs", // run_powershell_script, Windows-only
   "platform/windows.rs",
   "platform/windows_executor.rs",

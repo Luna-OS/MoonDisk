@@ -1,5 +1,5 @@
 import { useState } from "react";
-import type { FileSystem, OperationRequest, Partition } from "@/types/models";
+import type { FileSystem, OperationRequest, Partition, Platform } from "@/types/models";
 import { DRIVE_LETTERS, fsOptions } from "@/lib/options";
 import { fsLabel } from "@/lib/segments";
 import { EraseIcon, TrashIcon } from "@/components/icons";
@@ -7,20 +7,21 @@ import { EraseIcon, TrashIcon } from "@/components/icons";
 export function PartitionActions({
   partition,
   busy,
-  windows,
+  platform,
   onRun,
   onFormat,
   onDelete,
 }: {
   partition: Partition;
   busy: boolean;
-  windows: boolean;
+  platform: Platform;
   onRun: (req: OperationRequest) => void;
   onFormat: (req: OperationRequest) => void;
   onDelete: (req: OperationRequest) => void;
 }) {
+  const windows = platform === "windows";
   const [label, setLabel] = useState(partition.label ?? "");
-  const [formatFs, setFormatFs] = useState<FileSystem>(fsOptions(windows)[0]);
+  const [formatFs, setFormatFs] = useState<FileSystem>(fsOptions(platform)[0]);
   const [driveLetter, setDriveLetter] = useState(partition.driveLetter ?? DRIVE_LETTERS[1]);
 
   return (
@@ -80,14 +81,14 @@ export function PartitionActions({
       <section className="flex flex-col gap-3 rounded-xl border border-error-500/25 bg-error-500/5 p-3">
         <h4 className="md-eyebrow text-[#f28b92]">Danger zone</h4>
         <div className="flex flex-wrap items-end gap-2">
-          <label className="md-field w-40">
+          <label className="md-field w-44">
             Reformat as
             <select
               value={formatFs}
               onChange={(e) => setFormatFs(e.target.value as FileSystem)}
               className="md-input"
             >
-              {fsOptions(windows).map((fs) => (
+              {fsOptions(platform).map((fs) => (
                 <option key={fs} value={fs}>
                   {fsLabel(fs)}
                 </option>

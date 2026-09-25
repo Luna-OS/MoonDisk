@@ -2,11 +2,11 @@
 
 > Your disks, safely under the moon.
 
-MoonDisk is a modern, open-source partition manager for Windows and Linux.
+MoonDisk is a modern, open-source partition manager for Windows, macOS and Linux.
 
 ## Features
 
-- Overview of disks and partitions (GPT/MBR, NTFS/FAT32/exFAT/ext2-4/Btrfs/XFS/Swap)
+- Overview of disks and partitions (GPT/MBR, NTFS/FAT32/exFAT/ext2-4/Btrfs/XFS/Swap/APFS/HFS+)
 - Create partitions with a chosen size, file system, label and (on Windows) drive letter
 - Format and delete partitions, change labels and drive letters
 - USB writer: write an ISO/IMG file onto a USB stick (e.g. a Linux installer), with
@@ -19,11 +19,21 @@ instead — MoonDisk warns when an image won't boot this way.
 
 ## Installation
 
-Ready-to-use installers for Windows (`.exe`) and Linux (`.deb`/`.rpm`) are available on the
-[Releases](https://github.com/Luna-OS/MoonDisk/releases) page.
+Ready-to-use installers for Windows (`.exe`), macOS (`.dmg`, Apple Silicon and Intel) and Linux
+(`.deb`/`.rpm`) are available on the [Releases](https://github.com/Luna-OS/MoonDisk/releases)
+page.
 
 On Windows, MoonDisk asks for administrator rights when it starts (UAC prompt) — partition
 operations through PowerShell's Storage module require them.
+
+On macOS, open the `.dmg` and drag MoonDisk into Applications. The app isn't notarized by Apple
+yet, so the first start is blocked: open **System Settings → Privacy & Security** and click
+**Open Anyway** next to the MoonDisk message. Partition changes go through `diskutil`; the USB
+writer asks for your password, because writing a whole drive needs administrator rights.
+macOS support is new — the Mac version hasn't been tested on real hardware yet, so please
+report anything that doesn't work. On macOS a new partition can only go directly after an
+existing one (a `diskutil` limitation), and NTFS and Linux file systems can be shown but not
+created.
 
 **Warning:** MoonDisk modifies real disks. Creating, deleting, formatting and relabeling
 partitions can cause permanent data loss — including on system, boot or EFI partitions — if

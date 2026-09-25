@@ -151,6 +151,20 @@ describe("App", () => {
     expect(screen.queryByLabelText("Drive letter")).not.toBeInTheDocument();
   });
 
+  it("offers the file systems macOS can create", async () => {
+    mockBackend([sampleDisk], { version: "0.0.0-test", platform: "macos" });
+    render(<App />);
+
+    fireEvent.click(await screen.findByText("Lunaris NV-1000"));
+    fireEvent.click(await screen.findByRole("button", { name: /Unallocated/ }));
+
+    const fs = screen.getByLabelText("File system");
+    expect(within(fs).getByRole("option", { name: "APFS" })).toBeInTheDocument();
+    expect(within(fs).getByRole("option", { name: "Mac OS Extended" })).toBeInTheDocument();
+    expect(within(fs).queryByRole("option", { name: "NTFS" })).not.toBeInTheDocument();
+    expect(screen.queryByLabelText("Drive letter")).not.toBeInTheDocument();
+  });
+
   it("USB writer only offers USB drives", async () => {
     mockBackend([sampleDisk, usbDisk]);
     await openUsbWriter();

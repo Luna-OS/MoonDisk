@@ -251,6 +251,11 @@ fn format_partition(
             args.push(partition_path);
             run(Command::new("mkswap").args(args))?;
         }
+        FileSystem::Apfs | FileSystem::HfsPlus => {
+            return Err(ExecutionError::NotImplemented(
+                "Linux cannot create APFS or Mac OS Extended file systems".into(),
+            ));
+        }
         FileSystem::Unformatted | FileSystem::Unknown => {
             return Err(ExecutionError::NotImplemented(
                 "formatting to this file system is not supported".into(),

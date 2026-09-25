@@ -15,6 +15,9 @@ pub enum FileSystem {
     Btrfs,
     Xfs,
     LinuxSwap,
+    Apfs,
+    /// Mac OS Extended (HFS+).
+    HfsPlus,
     /// The partition has no recognizable filesystem signature.
     Unformatted,
     /// A filesystem exists but MoonDisk does not recognize it.
@@ -38,6 +41,8 @@ impl FileSystem {
             "btrfs" => FileSystem::Btrfs,
             "xfs" => FileSystem::Xfs,
             "swap" => FileSystem::LinuxSwap,
+            "apfs" => FileSystem::Apfs,
+            "hfs" | "hfsplus" => FileSystem::HfsPlus,
             _ => FileSystem::Unknown,
         }
     }

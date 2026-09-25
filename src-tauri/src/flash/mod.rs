@@ -10,7 +10,9 @@
 use crate::models::{BusType, Disk};
 use crate::operations::ExecutionError;
 use serde::Serialize;
-use std::fs::{File, OpenOptions};
+use std::fs::File;
+#[cfg(not(target_os = "macos"))]
+use std::fs::OpenOptions;
 use std::io::{self, Read, Seek, SeekFrom, Write};
 use std::path::Path;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -55,10 +57,27 @@ pub trait RawTarget: Read + Write + Seek {
 }
 
 impl RawTarget for File {
+    #[cfg(not(target_os = "macos"))]
     fn flush_to_device(&mut self) -> io::Result<()> {
         self.sync_all()
     }
+
+    /// Writes to macOS' raw `/dev/rdiskN` bypass the buffer cache, and the
+    /// `F_FULLFSYNC` behind `sync_all` isn't supported on device nodes.
+    #[cfg(target_os = "macos")]
+    fn flush_to_device(&mut self) -> io::Result<()> {
+        Ok(())
+    }
 }
+
+/// Opens the whole disk for raw reading and writing.
+#[cfg(not(target_os = "macos"))]
+fn open_raw(disk: &Disk) -> io::Result<File> {
+    OpenOptions::new().read(true).write(true).open(&disk.id.0)
+}
+
+#[cfg(target_os = "macos")]
+use platform::open_raw;
 
 fn padded_len(len: u64) -> u64 {
     len.div_ceil(SECTOR) * SECTOR
@@ -202,7 +221,7 @@ pub fn run(
     platform::prepare_raw_write(disk)?;
 
     let result = (|| {
-        let mut target = OpenOptions::new().read(true).write(true).open(&disk.id.0)?;
+        let mut target = open_raw(disk)?;
         let mut image = File::open(image_path)?;
         write_image(&mut image, image_len, &mut target, cancel, |done| {
             report(Phase::Writing, done, image_len)
@@ -226,6 +245,8 @@ pub fn run(
 
 #[cfg(target_os = "linux")]
 use crate::platform::linux_executor as platform;
+#[cfg(target_os = "macos")]
+use crate::platform::macos_executor as platform;
 #[cfg(target_os = "windows")]
 use crate::platform::windows_executor as platform;
 

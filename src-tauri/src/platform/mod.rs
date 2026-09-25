@@ -16,6 +16,14 @@ pub mod linux_executor;
 #[cfg(target_os = "windows")]
 pub mod windows;
 
+// Also compiled for tests on Linux: the diskutil/ioreg parsing and the
+// argument building are plain functions tested there too.
+#[cfg(any(target_os = "macos", all(test, unix)))]
+pub mod macos;
+
+#[cfg(any(target_os = "macos", all(test, unix)))]
+pub mod macos_executor;
+
 #[cfg(target_os = "windows")]
 pub mod windows_executor;
 
@@ -133,6 +141,7 @@ pub trait DiskInventory: Send + Sync {
 pub enum InventorySource {
     Linux,
     Windows,
+    MacOs,
 }
 
 #[cfg(test)]

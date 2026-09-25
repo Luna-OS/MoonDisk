@@ -1,5 +1,13 @@
 import { useCallback, useEffect, useState, type ReactNode } from "react";
-import type { AppInfo, BusType, Disk, OperationRequest, Partition, Segment } from "@/types/models";
+import type {
+  AppInfo,
+  BusType,
+  Disk,
+  OperationRequest,
+  Partition,
+  Platform,
+  Segment,
+} from "@/types/models";
 import { hasFlag, PartitionFlags } from "@/types/models";
 import { executeOperation, getAppInfo, listDisks } from "@/lib/ipc";
 import { formatBytes } from "@/lib/format";
@@ -97,7 +105,7 @@ export default function App() {
   }, [refresh]);
 
   const selectedDisk = disks.find((d) => d.id === selectedDiskId) ?? null;
-  const windows = appInfo?.platform === "windows";
+  const platform = appInfo?.platform ?? "linux";
   const loading = appInfo === null && loadError === null;
 
   async function runDirect(request: OperationRequest) {
@@ -220,7 +228,7 @@ export default function App() {
             {selectedDisk ? (
               <DiskDetail
                 disk={selectedDisk}
-                windows={windows}
+                platform={platform}
                 busy={busy}
                 selectedSegmentId={selectedSegmentId}
                 onSelectSegment={setSelectedSegmentId}
@@ -387,7 +395,7 @@ function DiskCard({
 
 function DiskDetail({
   disk,
-  windows,
+  platform,
   busy,
   selectedSegmentId,
   onSelectSegment,
@@ -395,7 +403,7 @@ function DiskDetail({
   onCritical,
 }: {
   disk: Disk;
-  windows: boolean;
+  platform: Platform;
   busy: boolean;
   selectedSegmentId: string | null;
   onSelectSegment: (id: string | null) => void;
@@ -457,14 +465,14 @@ function DiskDetail({
                     start={seg.value.start}
                     size={seg.value.size}
                     busy={busy}
-                    windows={windows}
+                    platform={platform}
                     onCreate={onRun}
                   />
                 ) : (
                   <PartitionActions
                     partition={seg.value}
                     busy={busy}
-                    windows={windows}
+                    platform={platform}
                     onRun={onRun}
                     onFormat={(req) => onCritical(seg.value, req)}
                     onDelete={(req) => onCritical(seg.value, req)}

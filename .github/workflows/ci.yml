@@ -29,7 +29,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, windows-latest]
+        os: [ubuntu-latest, windows-latest, macos-latest]
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v5
@@ -65,7 +65,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, windows-latest]
+        os: [ubuntu-latest, windows-latest, macos-latest]
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v5
@@ -91,12 +91,14 @@ jobs:
 
       - run: npm ci
       # Debug build only: proves the whole stack (frontend build ->
-      # cargo build -> bundling) still works on both platforms, without
+      # cargo build -> bundling) still works on every platform, without
       # spending release-workflow-level time on an optimized build.
       - run: npx tauri build --debug --bundles deb
         if: runner.os == 'Linux'
       - run: npx tauri build --debug --bundles nsis
         if: runner.os == 'Windows'
+      - run: npx tauri build --debug --bundles dmg
+        if: runner.os == 'macOS'
 
   safety-scan:
     runs-on: ubuntu-latest

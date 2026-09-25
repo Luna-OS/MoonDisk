@@ -20,6 +20,8 @@ const FS_LABELS: Record<FileSystem, string> = {
   btrfs: "Btrfs",
   xfs: "XFS",
   linuxSwap: "Swap",
+  apfs: "APFS",
+  hfsPlus: "Mac OS Extended",
   unformatted: "Unformatted",
   unknown: "Unknown",
 };
@@ -59,6 +61,8 @@ const FS_COLORS: Partial<Record<FileSystem, string>> = {
   btrfs: "bg-orange-300",
   xfs: "bg-fuchsia-300",
   linuxSwap: "bg-rose-400",
+  apfs: "bg-violet-300",
+  hfsPlus: "bg-indigo-300",
 };
 
 export function segmentColorClass(seg: Segment): string {

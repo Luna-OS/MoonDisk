@@ -1,5 +1,5 @@
 import { useState } from "react";
-import type { Disk, FileSystem, OperationRequest } from "@/types/models";
+import type { Disk, FileSystem, OperationRequest, Platform } from "@/types/models";
 import { operationRisk } from "@/types/models";
 import { bytesValue, formatBytes } from "@/lib/format";
 import { alignedFreeRange } from "@/lib/alignment";
@@ -16,17 +16,18 @@ export function FreeSpaceActions({
   start,
   size,
   busy,
-  windows,
+  platform,
   onCreate,
 }: {
   disk: Disk;
   start: string;
   size: string;
   busy: boolean;
-  windows: boolean;
+  platform: Platform;
   onCreate: (req: OperationRequest) => void;
 }) {
-  const [fs, setFs] = useState<FileSystem>(fsOptions(windows)[0]);
+  const windows = platform === "windows";
+  const [fs, setFs] = useState<FileSystem>(fsOptions(platform)[0]);
   const [label, setLabel] = useState("");
   const [driveLetter, setDriveLetter] = useState(DRIVE_LETTERS[1]);
 
@@ -80,7 +81,7 @@ export function FreeSpaceActions({
             onChange={(e) => setFs(e.target.value as FileSystem)}
             className="md-input"
           >
-            {fsOptions(windows).map((f) => (
+            {fsOptions(platform).map((f) => (
               <option key={f} value={f}>
                 {fsLabel(f)}
               </option>
