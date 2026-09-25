@@ -6,7 +6,11 @@ use serde::{Deserialize, Serialize};
 /// place where arbitrary text turns into a process argument — see
 /// `docs/architecture.md` §6.1.
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(tag = "type", rename_all = "camelCase")]
+#[serde(
+    tag = "type",
+    rename_all = "camelCase",
+    rename_all_fields = "camelCase"
+)]
 pub enum OperationRequest {
     CreatePartition {
         disk: DiskId,
@@ -102,4 +106,40 @@ pub enum RiskLevel {
     Medium,
     High,
     Critical,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // The exact JSON shapes src/App.tsx sends. `rename_all` on an enum only
+    // renames the variants, not their fields, so `driveLetter` used to be
+    // rejected with "missing field `drive_letter`".
+    #[test]
+    fn deserializes_the_camel_case_fields_the_frontend_sends() {
+        let create: OperationRequest = serde_json::from_str(
+            r#"{"type":"createPartition","disk":"\\\\.\\PhysicalDrive0","start":"1048576",
+                "size":"1048576","filesystem":"ntfs","label":null,"driveLetter":"L"}"#,
+        )
+        .unwrap();
+        assert!(matches!(
+            create,
+            OperationRequest::CreatePartition {
+                drive_letter: Some('L'),
+                ..
+            }
+        ));
+
+        let set: OperationRequest = serde_json::from_str(
+            r#"{"type":"setDriveLetter","partition":"\\\\.\\PhysicalDrive0#1","driveLetter":"L"}"#,
+        )
+        .unwrap();
+        assert!(matches!(
+            set,
+            OperationRequest::SetDriveLetter {
+                drive_letter: 'L',
+                ..
+            }
+        ));
+    }
 }
