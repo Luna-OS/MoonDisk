@@ -28,6 +28,14 @@ pub mod windows_executor;
 #[cfg(target_os = "windows")]
 pub fn run_powershell_script(script: &str, params: &[&str]) -> Result<String, std::io::Error> {
     use std::io::Write;
+    use std::os::windows::process::CommandExt;
+
+    // Without this flag, spawning a console app like powershell.exe from a
+    // GUI app briefly flashes a visible console window for every single
+    // operation. CREATE_NO_WINDOW (winbase.h) suppresses that; the script
+    // still runs and its output is still captured via the piped stdout/
+    // stderr below.
+    const CREATE_NO_WINDOW: u32 = 0x0800_0000;
 
     let mut path = std::env::temp_dir();
     path.push(format!("moondisk-{}.ps1", uuid_like()));
@@ -46,6 +54,7 @@ pub fn run_powershell_script(script: &str, params: &[&str]) -> Result<String, st
     ]);
     cmd.arg(&path);
     cmd.args(params);
+    cmd.creation_flags(CREATE_NO_WINDOW);
 
     let output = cmd.output();
     let _ = std::fs::remove_file(&path);

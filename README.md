@@ -18,6 +18,9 @@ Linux.
 Fertige Installationspakete für Windows (`.exe`) und Linux (`.deb`/`.rpm`)
 gibt es unter [Releases](https://github.com/Luna-OS/MoonDisk/releases).
 
+Unter Windows fordert MoonDisk beim Start Administratorrechte an (UAC-
+Abfrage) – Partitionsoperationen über PowerShell/Storage benötigen das.
+
 **Sicherheitshinweis:** MoonDisk verändert echte Datenträger. Erstellen,
 Löschen, Formatieren und Label-Änderungen von Partitionen können zu
 unwiderruflichem Datenverlust führen, auch auf der System-, Boot- oder
