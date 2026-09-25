@@ -141,6 +141,13 @@ pub fn check_target(disk: &Disk, image_len: u64) -> Result<(), FlashError> {
 
 /// Copies `image_len` bytes of `image` onto the start of `target`. The last
 /// chunk is zero-padded to a whole sector.
+///
+/// The first chunk, which holds the image's partition table, is cleared
+/// up front and written last. While the rest is copied, the drive has no
+/// partition table, so the OS can't pick up the image's partitions
+/// half-written and mount them mid-copy. Windows did that, and was left
+/// showing stale volumes afterwards. A cancelled write leaves a drive
+/// without a partition table, not one that looks bootable but isn't.
 pub fn write_image<S: Read, T: RawTarget>(
     image: &mut S,
     image_len: u64,
@@ -148,28 +155,42 @@ pub fn write_image<S: Read, T: RawTarget>(
     cancel: &AtomicBool,
     mut progress: impl FnMut(u64),
 ) -> Result<(), FlashError> {
-    let mut buf = vec![0u8; CHUNK];
-    let mut done = 0u64;
-    let mut unsynced = 0u64;
+    let head_len = image_len.min(CHUNK as u64);
+    let mut head = vec![0u8; padded_len(head_len) as usize];
     target.seek(SeekFrom::Start(0))?;
-    while done < image_len {
+    target.write_all(&head)?;
+    image.read_exact(&mut head[..head_len as usize])?;
+
+    let mut buf = vec![0u8; CHUNK];
+    let mut offset = head_len;
+    let mut unsynced = 0u64;
+    while offset < image_len {
         if cancel.load(Ordering::Relaxed) {
             return Err(FlashError::Cancelled);
         }
-        let n = (image_len - done).min(CHUNK as u64) as usize;
+        let n = (image_len - offset).min(CHUNK as u64) as usize;
         image.read_exact(&mut buf[..n])?;
         let padded = padded_len(n as u64) as usize;
         buf[n..padded].fill(0);
         target.write_all(&buf[..padded])?;
-        done += n as u64;
+        offset += n as u64;
         unsynced += padded as u64;
         if unsynced >= SYNC_EVERY {
             target.flush_to_device()?;
             unsynced = 0;
         }
-        progress(done);
+        progress(offset - head_len);
     }
+    // Everything else must be on the drive before the table appears.
     target.flush_to_device()?;
+    if cancel.load(Ordering::Relaxed) {
+        return Err(FlashError::Cancelled);
+    }
+
+    target.seek(SeekFrom::Start(0))?;
+    target.write_all(&head)?;
+    target.flush_to_device()?;
+    progress(image_len);
     Ok(())
 }
 
@@ -364,9 +385,89 @@ mod tests {
         )
         .unwrap_err();
         assert!(matches!(err, FlashError::Cancelled));
-        // Only the first chunk made it before the cancel took effect.
-        assert_eq!(&drive.get_ref()[..CHUNK], &image[..CHUNK]);
-        assert!(drive.get_ref()[CHUNK..].iter().all(|&b| b == 0xEE));
+        // The partition table area was cleared and never written; only the
+        // chunk after it made it before the cancel took effect.
+        assert!(drive.get_ref()[..CHUNK].iter().all(|&b| b == 0));
+        assert_eq!(&drive.get_ref()[CHUNK..CHUNK * 2], &image[CHUNK..CHUNK * 2]);
+        assert!(drive.get_ref()[CHUNK * 2..].iter().all(|&b| b == 0xEE));
+    }
+
+    /// Records where each write lands.
+    struct Recording {
+        inner: Cursor<Vec<u8>>,
+        writes: Vec<(u64, Vec<u8>)>,
+    }
+
+    impl Read for Recording {
+        fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
+            self.inner.read(buf)
+        }
+    }
+
+    impl Write for Recording {
+        fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
+            let at = self.inner.position();
+            let n = self.inner.write(buf)?;
+            self.writes.push((at, buf[..n].to_vec()));
+            Ok(n)
+        }
+        fn flush(&mut self) -> io::Result<()> {
+            Ok(())
+        }
+    }
+
+    impl Seek for Recording {
+        fn seek(&mut self, pos: SeekFrom) -> io::Result<u64> {
+            self.inner.seek(pos)
+        }
+    }
+
+    impl RawTarget for Recording {
+        fn flush_to_device(&mut self) -> io::Result<()> {
+            Ok(())
+        }
+    }
+
+    #[test]
+    fn writes_the_partition_table_last() {
+        let image = pattern(CHUNK * 2 + 512);
+        let mut drive = Recording {
+            inner: Cursor::new(vec![0xEEu8; CHUNK * 3]),
+            writes: Vec::new(),
+        };
+        let cancel = AtomicBool::new(false);
+        write_image(
+            &mut Cursor::new(&image),
+            image.len() as u64,
+            &mut drive,
+            &cancel,
+            |_| {},
+        )
+        .unwrap();
+
+        let (first_at, first) = drive.writes.first().unwrap();
+        assert_eq!(*first_at, 0);
+        assert!(first.iter().all(|&b| b == 0), "table area cleared first");
+        let (last_at, last) = drive.writes.last().unwrap();
+        assert_eq!(*last_at, 0);
+        assert_eq!(&last[..], &image[..CHUNK]);
+        assert_eq!(&drive.inner.get_ref()[..image.len()], &image[..]);
+    }
+
+    #[test]
+    fn writes_an_image_smaller_than_one_chunk() {
+        let image = pattern(3_000);
+        let mut drive = Cursor::new(vec![0xEEu8; 8_192]);
+        let cancel = AtomicBool::new(false);
+        let mut seen = Vec::new();
+        write_image(&mut Cursor::new(&image), 3_000, &mut drive, &cancel, |d| {
+            seen.push(d)
+        })
+        .unwrap();
+        assert_eq!(&drive.get_ref()[..3_000], &image[..]);
+        assert!(drive.get_ref()[3_000..4_096].iter().all(|&b| b == 0));
+        assert_eq!(drive.get_ref()[4_096], 0xEE);
+        assert_eq!(seen, vec![3_000]);
     }
 
     #[test]

@@ -428,6 +428,14 @@ function ResultView({ result, onBack }: { result: Result; onBack: () => void }) 
       >
         {result.text}
       </p>
+      {result.kind === "done" && (
+        <p className="md-inset max-w-md p-3 text-xs leading-relaxed text-(--md-color-text-muted)">
+          Your computer usually can't read a bootable drive's system partition, so the drive may
+          look mostly empty or unallocated now (e.g. in Disk Management) — that's expected. To use
+          it as a normal USB stick again, delete its partitions in the Partitions tab and create a
+          new one.
+        </p>
+      )}
       <button onClick={onBack} className="md-btn md-btn-ghost">
         {result.kind === "done" ? "Write another" : "Back"}
       </button>
