@@ -194,51 +194,19 @@ pub(crate) fn diskutil_args(
     Ok(args)
 }
 
-/// Receives one file descriptor sent over `socket` with `SCM_RIGHTS`, the
-/// way `authopen -stdoutpipe` hands over the device it opened.
+/// Receives the file descriptor `authopen -stdoutpipe` sends back.
 #[cfg(unix)]
 pub(crate) fn receive_fd(
     socket: &std::os::unix::net::UnixStream,
 ) -> std::io::Result<std::os::fd::OwnedFd> {
-    use std::os::fd::{AsRawFd, FromRawFd, OwnedFd};
-
     let mut data = [0u8; 64];
-    let mut iov = libc::iovec {
-        iov_base: data.as_mut_ptr().cast(),
-        iov_len: data.len(),
-    };
-    // Room for a control message carrying one fd, aligned for `cmsghdr`.
-    let mut control = [0u64; 8];
-    // SAFETY: an all-zero `msghdr` is valid; the pointers set below outlive
-    // the `recvmsg` call.
-    let mut msg: libc::msghdr = unsafe { std::mem::zeroed() };
-    msg.msg_iov = &mut iov;
-    msg.msg_iovlen = 1;
-    msg.msg_control = control.as_mut_ptr().cast();
-    msg.msg_controllen = std::mem::size_of_val(&control) as _;
-
-    // SAFETY: `msg` points to valid, writable buffers of the given sizes.
-    let received = unsafe { libc::recvmsg(socket.as_raw_fd(), &mut msg, 0) };
-    if received < 0 {
-        return Err(std::io::Error::last_os_error());
-    }
-
-    // SAFETY: `recvmsg` filled `msg`; the CMSG macros stay within
-    // `msg_controllen` bytes of `control`.
-    unsafe {
-        let mut cmsg = libc::CMSG_FIRSTHDR(&msg);
-        while !cmsg.is_null() {
-            if (*cmsg).cmsg_level == libc::SOL_SOCKET && (*cmsg).cmsg_type == libc::SCM_RIGHTS {
-                let fd = std::ptr::read_unaligned(libc::CMSG_DATA(cmsg).cast::<libc::c_int>());
-                return Ok(OwnedFd::from_raw_fd(fd));
-            }
-            cmsg = libc::CMSG_NXTHDR(&msg, cmsg);
-        }
-    }
-    Err(std::io::Error::new(
-        std::io::ErrorKind::PermissionDenied,
-        "macOS did not grant access to the drive (was the password dialog cancelled?)",
-    ))
+    let (_, fds) = crate::fdpass::recv(socket, &mut data)?;
+    fds.into_iter().next().ok_or_else(|| {
+        std::io::Error::new(
+            std::io::ErrorKind::PermissionDenied,
+            "macOS did not grant access to the drive (was the password dialog cancelled?)",
+        )
+    })
 }
 
 #[cfg(target_os = "macos")]
@@ -307,17 +275,21 @@ mod real {
         let _ = diskutil(&["mountDisk", &disk.id.0]);
     }
 
-    /// Opens the raw device for reading and writing through `authopen`,
-    /// which shows macOS' password dialog.
+    /// Opens the raw device for reading and writing. The native app's
+    /// helper already runs as root; otherwise `authopen` asks for the
+    /// password.
     pub fn open_raw(disk: &Disk) -> std::io::Result<File> {
+        let raw = raw_device_path(&disk.id.0);
+        // SAFETY: geteuid has no preconditions.
+        if unsafe { libc::geteuid() } == 0 {
+            return std::fs::OpenOptions::new()
+                .read(true)
+                .write(true)
+                .open(&raw);
+        }
         let (ours, theirs) = UnixStream::pair()?;
         let mut child = Command::new("/usr/libexec/authopen")
-            .args([
-                "-stdoutpipe",
-                "-o",
-                &libc::O_RDWR.to_string(),
-                &raw_device_path(&disk.id.0),
-            ])
+            .args(["-stdoutpipe", "-o", &libc::O_RDWR.to_string(), &raw])
             .stdin(Stdio::null())
             .stdout(Stdio::from(std::os::fd::OwnedFd::from(theirs)))
             .stderr(Stdio::null())
@@ -513,69 +485,11 @@ mod tests {
     }
 
     #[test]
-    fn receives_a_file_descriptor_sent_over_a_socket() {
-        use std::io::Read;
-        use std::os::fd::AsRawFd;
-        use std::os::unix::net::UnixStream;
-
-        let file = tempfile_with(b"moon");
-        let (a, b) = UnixStream::pair().unwrap();
-        send_fd(&a, file.as_raw_fd());
-        let mut received = std::fs::File::from(receive_fd(&b).unwrap());
-
-        let mut text = String::new();
-        received.read_to_string(&mut text).unwrap();
-        assert_eq!(text, "moon");
-        drop(file);
-    }
-
-    #[test]
     fn reports_a_denied_authorization_when_no_fd_arrives() {
         use std::os::unix::net::UnixStream;
         let (a, b) = UnixStream::pair().unwrap();
         drop(a);
         let err = receive_fd(&b).unwrap_err();
         assert_eq!(err.kind(), std::io::ErrorKind::PermissionDenied);
-    }
-
-    fn tempfile_with(content: &[u8]) -> std::fs::File {
-        use std::io::{Seek, Write};
-        let path = std::env::temp_dir().join(format!("moondisk-fd-{}", std::process::id()));
-        let mut f = std::fs::OpenOptions::new()
-            .read(true)
-            .write(true)
-            .create(true)
-            .truncate(true)
-            .open(&path)
-            .unwrap();
-        std::fs::remove_file(&path).unwrap();
-        f.write_all(content).unwrap();
-        f.rewind().unwrap();
-        f
-    }
-
-    /// What `authopen -stdoutpipe` does on the other end.
-    fn send_fd(socket: &std::os::unix::net::UnixStream, fd: libc::c_int) {
-        use std::os::fd::AsRawFd;
-        let mut byte = [0u8; 1];
-        let mut iov = libc::iovec {
-            iov_base: byte.as_mut_ptr().cast(),
-            iov_len: 1,
-        };
-        let mut control = [0u64; 8];
-        unsafe {
-            let space = libc::CMSG_SPACE(std::mem::size_of::<libc::c_int>() as _);
-            let mut msg: libc::msghdr = std::mem::zeroed();
-            msg.msg_iov = &mut iov;
-            msg.msg_iovlen = 1;
-            msg.msg_control = control.as_mut_ptr().cast();
-            msg.msg_controllen = space as _;
-            let cmsg = libc::CMSG_FIRSTHDR(&msg);
-            (*cmsg).cmsg_level = libc::SOL_SOCKET;
-            (*cmsg).cmsg_type = libc::SCM_RIGHTS;
-            (*cmsg).cmsg_len = libc::CMSG_LEN(std::mem::size_of::<libc::c_int>() as _) as _;
-            std::ptr::write_unaligned(libc::CMSG_DATA(cmsg).cast::<libc::c_int>(), fd);
-            assert_eq!(libc::sendmsg(socket.as_raw_fd(), &msg, 0), 1);
-        }
     }
 }

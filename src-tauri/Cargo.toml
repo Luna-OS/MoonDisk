@@ -1,6 +1,6 @@
 [package]
 name = "moondisk"
-version = "0.2.16"
+version = "0.2.17"
 description = "MoonDisk – your disks, safely under the moon. A local, open-source partition manager."
 authors = ["MoonDisk contributors"]
 license = "GPL-3.0-or-later"
@@ -18,21 +18,42 @@ rust-version = "1.77"
 name = "moondisk_lib"
 crate-type = ["staticlib", "cdylib", "rlib"]
 
+[[bin]]
+name = "moondisk"
+path = "src/main.rs"
+required-features = ["gui"]
+
+# The privileged helper of the native macOS app. Built only on request, so
+# Tauri doesn't bundle it into its installers, and without the Tauri UI:
+# `cargo build --no-default-features --features helper --bin moondisk-helper`
+[[bin]]
+name = "moondisk-helper"
+path = "src/bin/moondisk-helper.rs"
+required-features = ["helper"]
+
+[features]
+default = ["gui"]
+# The Tauri app (Windows, Linux).
+gui = ["dep:tauri", "dep:tauri-plugin-dialog", "dep:tauri-build"]
+helper = []
+
 [build-dependencies]
-tauri-build = { version = "2.6.3", features = [] }
+tauri-build = { version = "2.6.3", features = [], optional = true }
 
 [dependencies]
-tauri = { version = "2.11.6", features = [] }
+tauri = { version = "2.11.6", features = [], optional = true }
 serde = { version = "1.0.229", features = ["derive"] }
 serde_json = "1.0.151"
 bitflags = { version = "2.13.2", features = ["serde"] }
 thiserror = "2.0.21"
-tauri-plugin-dialog = "2.7.3"
+tauri-plugin-dialog = { version = "2.7.3", optional = true }
 
 # macOS: `diskutil`/`ioreg` report disks as XML property lists, and the USB
 # writer receives its authorized raw-device file descriptor over a socket.
 [target.'cfg(target_os = "macos")'.dependencies]
 plist = "1.10.1"
+
+[target.'cfg(unix)'.dependencies]
 libc = "0.2.189"
 
 [dev-dependencies]
@@ -43,7 +64,6 @@ fatfs = "0.3.6"
 # The macOS parsers and fd passing are unit-tested on Linux too.
 [target.'cfg(unix)'.dev-dependencies]
 plist = "1.10.1"
-libc = "0.2.189"
 
 [profile.release]
 panic = "abort"

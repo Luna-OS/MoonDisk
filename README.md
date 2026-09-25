@@ -35,14 +35,15 @@ page.
 On Windows, MoonDisk asks for administrator rights when it starts (UAC prompt) — partition
 operations through PowerShell's Storage module require them.
 
-On macOS, open the `.dmg` and drag MoonDisk into Applications. The app isn't notarized by Apple
-yet, so the first start is blocked: open **System Settings → Privacy & Security** and click
-**Open Anyway** next to the MoonDisk message. Partition changes go through `diskutil`; the USB
-writer asks for your password, because writing a whole drive needs administrator rights.
-macOS support is new — the Mac version hasn't been tested on real hardware yet, so please
-report anything that doesn't work. On macOS a new partition can only go directly after an
-existing one (a `diskutil` limitation), and NTFS and Linux file systems can be shown but not
-created.
+On macOS, MoonDisk is a native SwiftUI app. Open the `.dmg` and drag MoonDisk into
+Applications. The app isn't notarized by Apple yet, so the first start is blocked: open
+**System Settings → Privacy & Security** and click **Open Anyway** next to the MoonDisk message.
+At every launch macOS asks for your password: MoonDisk then runs a small helper with
+administrator rights (`moondisk-helper`, the same Rust core as on Windows and Linux), which
+erasing, partitioning and writing drives requires. The Mac version hasn't been tested on real
+hardware yet, so please report anything that doesn't work. On macOS a new partition can only go
+directly after an existing one (a `diskutil` limitation), and NTFS and Linux file systems can be
+shown but not created.
 
 **Warning:** MoonDisk modifies real disks. Creating, deleting, formatting and relabeling
 partitions can cause permanent data loss — including on system, boot or EFI partitions — if

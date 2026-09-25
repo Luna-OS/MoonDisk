@@ -127,9 +127,15 @@ impl RawTarget for std::io::Cursor<Vec<u8>> {
 }
 
 pub fn image_info(path: &Path) -> io::Result<ImageInfo> {
-    let mut file = File::open(path)?;
+    image_info_of(&mut File::open(path)?, path)
+}
+
+/// Like [`image_info`], for an image that's already open (e.g. handed over
+/// by a front end that is allowed to read it when this process isn't).
+pub fn image_info_of(file: &mut File, path: &Path) -> io::Result<ImageInfo> {
     let size = file.metadata()?.len();
     let mut head = [0u8; 512];
+    file.seek(SeekFrom::Start(0))?;
     let has_boot_sector = file.read_exact(&mut head).is_ok() && head[510..512] == [0x55, 0xAA];
     Ok(ImageInfo {
         path: path.to_string_lossy().into_owned(),
@@ -139,7 +145,7 @@ pub fn image_info(path: &Path) -> io::Result<ImageInfo> {
             .unwrap_or_default(),
         size: crate::models::ByteSize(size),
         has_boot_sector,
-        copy_mode: copy::analyze(path),
+        copy_mode: copy::analyze(file),
     })
 }
 
@@ -252,10 +258,10 @@ pub fn verify_image<S: Read, T: RawTarget>(
     Ok(())
 }
 
-/// Writes the image at `image_path` onto `disk`, erasing everything on it.
-/// `report` is called with the current phase, bytes done and total bytes.
+/// Writes `image` onto `disk`, erasing everything on it. `report` is called
+/// with the current phase, bytes done and total bytes.
 pub fn run(
-    image_path: &Path,
+    image: &mut File,
     disk: &Disk,
     mode: WriteMode,
     verify: bool,
@@ -263,19 +269,19 @@ pub fn run(
     report: impl FnMut(Phase, u64, u64),
 ) -> Result<(), FlashError> {
     match mode {
-        WriteMode::Raw => run_raw(image_path, disk, verify, cancel, report),
-        WriteMode::Copy => copy::run(image_path, disk, verify, cancel, report),
+        WriteMode::Raw => run_raw(image, disk, verify, cancel, report),
+        WriteMode::Copy => copy::run(image, disk, verify, cancel, report),
     }
 }
 
 fn run_raw(
-    image_path: &Path,
+    image: &mut File,
     disk: &Disk,
     verify: bool,
     cancel: &AtomicBool,
     mut report: impl FnMut(Phase, u64, u64),
 ) -> Result<(), FlashError> {
-    let image_len = std::fs::metadata(image_path)?.len();
+    let image_len = image.metadata()?.len();
     check_target(disk, image_len)?;
 
     report(Phase::Preparing, 0, image_len);
@@ -283,14 +289,14 @@ fn run_raw(
 
     let result = (|| {
         let mut target = open_raw(disk)?;
-        let mut image = File::open(image_path)?;
-        write_image(&mut image, image_len, &mut target, cancel, |done| {
+        image.seek(SeekFrom::Start(0))?;
+        write_image(image, image_len, &mut target, cancel, |done| {
             report(Phase::Writing, done, image_len)
         })?;
         if verify {
             platform::drop_read_cache(disk)?;
-            let mut image = File::open(image_path)?;
-            verify_image(&mut image, image_len, &mut target, cancel, |done| {
+            image.seek(SeekFrom::Start(0))?;
+            verify_image(image, image_len, &mut target, cancel, |done| {
                 report(Phase::Verifying, done, image_len)
             })?;
         }

@@ -13,21 +13,14 @@
 //! MoonDisk only ever operates on the platform's actual disks — there is
 //! no mock/simulated mode.
 
-#[cfg(not(any(target_os = "linux", target_os = "windows", target_os = "macos")))]
-compile_error!("MoonDisk only supports Windows, Linux and macOS");
-
-use crate::flash::{FlashError, ImageInfo, Phase, WriteMode};
-use crate::models::ByteSize;
+use crate::flash::{ImageInfo, WriteMode};
 use crate::models::{Disk, DiskId};
-use crate::operations::{
-    validate, Confirmation, DiskOperationExecutor, ExecutionError, OperationRequest, RiskLevel,
-};
-use crate::platform::DiskInventory;
+use crate::operations::{ExecutionError, OperationRequest};
+use crate::service;
 use serde::Serialize;
-use std::path::PathBuf;
+use std::fs::File;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
-use std::time::{Duration, Instant};
 use tauri::Emitter;
 
 pub struct AppState {
@@ -44,45 +37,11 @@ struct FlashControl {
     cancel: AtomicBool,
 }
 
-fn platform_inventory() -> Box<dyn DiskInventory> {
-    #[cfg(target_os = "linux")]
-    {
-        Box::new(crate::platform::linux::LinuxDiskProvider)
-    }
-    #[cfg(target_os = "windows")]
-    {
-        Box::new(crate::platform::windows::WindowsDiskProvider)
-    }
-    #[cfg(target_os = "macos")]
-    {
-        Box::new(crate::platform::macos::MacDiskProvider)
-    }
-}
-
 impl AppState {
     pub fn new() -> Self {
         AppState {
             exec_lock: Mutex::new(()),
             flash: Arc::default(),
-        }
-    }
-
-    fn inventory(&self) -> Box<dyn DiskInventory> {
-        platform_inventory()
-    }
-
-    fn executor(&self) -> Box<dyn DiskOperationExecutor> {
-        #[cfg(target_os = "linux")]
-        {
-            Box::new(crate::platform::linux_executor::LinuxDiskExecutor)
-        }
-        #[cfg(target_os = "windows")]
-        {
-            Box::new(crate::platform::windows_executor::WindowsDiskExecutor)
-        }
-        #[cfg(target_os = "macos")]
-        {
-            Box::new(crate::platform::macos_executor::MacDiskExecutor)
         }
     }
 }
@@ -106,25 +65,18 @@ pub struct AppInfo {
 pub fn app_info() -> AppInfo {
     AppInfo {
         version: env!("CARGO_PKG_VERSION").to_string(),
-        platform: if cfg!(target_os = "windows") {
-            "windows"
-        } else if cfg!(target_os = "macos") {
-            "macos"
-        } else {
-            "linux"
-        },
+        platform: service::platform_name(),
     }
 }
 
 #[tauri::command]
-pub fn disks_list(state: tauri::State<AppState>) -> Result<Vec<Disk>, String> {
-    state.inventory().list_disks().map_err(|e| e.to_string())
+pub fn disks_list() -> Result<Vec<Disk>, String> {
+    service::list_disks()
 }
 
 #[tauri::command]
-pub fn disk_get(state: tauri::State<AppState>, disk_id: String) -> Result<Disk, String> {
-    state
-        .inventory()
+pub fn disk_get(disk_id: String) -> Result<Disk, String> {
+    service::inventory()
         .disk(&DiskId::from(disk_id))
         .map_err(|e| e.to_string())
 }
@@ -153,24 +105,7 @@ pub fn execute_operation(
         .exec_lock
         .lock()
         .map_err(|_| "internal state is corrupted".to_string())?;
-
-    let disk = state
-        .inventory()
-        .disk(&request.disk_id())
-        .map_err(|e| ExecutionError::from(e).to_string())?;
-    validate(&disk, &request)
-        .map_err(ExecutionError::from)
-        .map_err(|e| e.to_string())?;
-
-    if request.risk() >= RiskLevel::High && !confirmed {
-        return Err(ExecutionError::ConfirmationMissing.to_string());
-    }
-
-    state
-        .executor()
-        .execute(&request, Confirmation { confirmed })
-        .map(|_| OperationOutcome { applied: true })
-        .map_err(|e| e.to_string())
+    service::execute(&request, confirmed).map(|_| OperationOutcome { applied: true })
 }
 
 /// Opens the native file picker for a disk image. `None` if the user
@@ -193,15 +128,6 @@ pub async fn select_image_file(app: tauri::AppHandle) -> Result<Option<ImageInfo
     crate::flash::image_info(&path)
         .map(Some)
         .map_err(|e| e.to_string())
-}
-
-#[derive(Debug, Clone, Serialize)]
-#[serde(rename_all = "camelCase")]
-struct FlashProgress {
-    phase: Phase,
-    done: ByteSize,
-    total: ByteSize,
-    bytes_per_second: f64,
 }
 
 /// Writes an image file onto a whole USB drive, erasing it. Emits
@@ -227,52 +153,23 @@ pub async fn flash_image(
     control.cancel.store(false, Ordering::SeqCst);
 
     let worker = control.clone();
-    let result = tauri::async_runtime::spawn_blocking(move || -> Result<(), FlashError> {
-        let disk = platform_inventory()
-            .disk(&DiskId::from(disk_id))
-            .map_err(ExecutionError::from)?;
-
-        let mut phase = Phase::Preparing;
-        let mut phase_started = Instant::now();
-        let mut last_emit: Option<Instant> = None;
-        crate::flash::run(
-            &PathBuf::from(image_path),
-            &disk,
+    let result = tauri::async_runtime::spawn_blocking(move || -> Result<(), String> {
+        let mut image = File::open(&image_path).map_err(|e| format!("{image_path}: {e}"))?;
+        service::flash(
+            &mut image,
+            &disk_id,
             mode,
             verify,
             &worker.cancel,
-            |p, done, total| {
-                let now = Instant::now();
-                if p != phase {
-                    phase = p;
-                    phase_started = now;
-                    last_emit = None;
-                }
-                let due = last_emit.map_or(true, |t| now - t >= Duration::from_millis(100));
-                if !due && done < total {
-                    return;
-                }
-                last_emit = Some(now);
-                let secs = (now - phase_started).as_secs_f64();
-                let _ = app.emit(
-                    "flash-progress",
-                    FlashProgress {
-                        phase: p,
-                        done: ByteSize(done),
-                        total: ByteSize(total),
-                        bytes_per_second: if secs > 0.0 { done as f64 / secs } else { 0.0 },
-                    },
-                );
+            |progress| {
+                let _ = app.emit("flash-progress", progress);
             },
         )
     })
     .await;
     control.busy.store(false, Ordering::SeqCst);
 
-    match result {
-        Ok(r) => r.map_err(|e| e.to_string()),
-        Err(e) => Err(e.to_string()),
-    }
+    result.map_err(|e| e.to_string())?
 }
 
 /// Asks a running `flash_image` to stop after the current chunk.

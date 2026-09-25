@@ -82,10 +82,6 @@ jobs:
     runs-on: macos-latest
     steps:
       - uses: actions/checkout@v5
-      - uses: actions/setup-node@v5
-        with:
-          node-version: 22
-          cache: npm
       - uses: dtolnay/rust-toolchain@stable
         with:
           targets: aarch64-apple-darwin,x86_64-apple-darwin
@@ -93,19 +89,19 @@ jobs:
         with:
           workspaces: src-tauri
 
-      - run: npm ci
-      # One DMG that runs natively on both Apple Silicon and Intel Macs.
-      - run: npx tauri build --target universal-apple-darwin --bundles dmg
+      # The native SwiftUI app plus its Rust helper, as one DMG that runs on
+      # both Apple Silicon and Intel Macs.
+      - run: macos/build-app.sh
 
       - name: Checksums
-        working-directory: src-tauri/target/universal-apple-darwin/release/bundle/dmg
-        run: shasum -a 256 *.dmg > ../../../../../../checksums-macos.txt
+        working-directory: macos/build
+        run: shasum -a 256 *.dmg > ../../checksums-macos.txt
 
       - uses: actions/upload-artifact@v4
         with:
           name: moondisk-macos
           path: |
-            src-tauri/target/universal-apple-darwin/release/bundle/dmg/*.dmg
+            macos/build/*.dmg
             checksums-macos.txt
 
   publish:

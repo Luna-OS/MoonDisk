@@ -4,15 +4,23 @@
 //! Every write goes through validation → an explicit confirmation click →
 //! `operations::DiskOperationExecutor`.
 
+#[cfg(feature = "gui")]
 pub mod commands;
+#[cfg(unix)]
+pub mod fdpass;
 pub mod flash;
+#[cfg(unix)]
+pub mod helper;
 pub mod models;
 pub mod operations;
 pub mod platform;
 pub mod security;
+pub mod service;
 
+#[cfg(feature = "gui")]
 use commands::AppState;
 
+#[cfg(feature = "gui")]
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()

@@ -65,7 +65,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, windows-latest, macos-latest]
+        os: [ubuntu-latest, windows-latest]
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v5
@@ -97,8 +97,18 @@ jobs:
         if: runner.os == 'Linux'
       - run: npx tauri build --debug --bundles nsis
         if: runner.os == 'Windows'
-      - run: npx tauri build --debug --bundles dmg
-        if: runner.os == 'macOS'
+
+  # The native macOS app (SwiftUI + the Rust helper), native architecture
+  # only; the release builds it universal.
+  macos-app:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+      - run: macos/build-app.sh --quick
 
   safety-scan:
     runs-on: ubuntu-latest

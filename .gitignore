@@ -45,3 +45,7 @@ npm-debug.log*
 # could carry a real GitHub owner/repo or other local overrides)
 .env
 .env.local
+
+# macOS app build output
+macos/build/
+macos/.build/

@@ -16,7 +16,6 @@ use crate::models::Disk;
 use serde::Serialize;
 use std::fs::File;
 use std::io::{self, Read, Seek, SeekFrom, Write};
-use std::path::Path;
 use std::sync::atomic::{AtomicBool, Ordering};
 
 const MIB: u64 = 1024 * 1024;
@@ -125,10 +124,9 @@ fn check_tree(tree: &IsoTree) -> Result<(), FlashError> {
     Ok(())
 }
 
-pub fn analyze(path: &Path) -> CopyModeInfo {
-    let result = File::open(path)
-        .map_err(FlashError::from)
-        .and_then(|mut f| iso9660::read_tree(&mut f).map_err(|_| rejected("")))
+pub fn analyze(image: &mut File) -> CopyModeInfo {
+    let result = iso9660::read_tree(image)
+        .map_err(|_| rejected(""))
         .and_then(|tree| {
             check_tree(&tree)?;
             Ok(fat32::volume_label_text(&tree.volume_label))
@@ -467,16 +465,15 @@ fn verify_files<R: Read + Seek, T: RawTarget>(
     Ok(())
 }
 
-/// Copies the files of the ISO at `image_path` onto `disk`.
+/// Copies the files of the ISO `image` onto `disk`.
 pub fn run(
-    image_path: &Path,
+    image: &mut File,
     disk: &Disk,
     verify: bool,
     cancel: &AtomicBool,
     mut report: impl FnMut(Phase, u64, u64),
 ) -> Result<(), FlashError> {
-    let mut image = File::open(image_path)?;
-    let prepared = prepare(&mut image)?;
+    let prepared = prepare(image)?;
     let sector = if disk.logical_sector_size == 4096 {
         4096
     } else {
@@ -492,7 +489,7 @@ pub fn run(
         .map_err(FlashError::from)
         .and_then(|mut target| {
             write_to(
-                &mut image,
+                image,
                 &prepared,
                 &plan,
                 &mut target,
@@ -524,7 +521,7 @@ mod tests {
 
     #[test]
     fn supports_linux_images_with_a_uefi_loader() {
-        let info = analyze(&fixture_path("archlike.iso"));
+        let info = analyze(&mut File::open(fixture_path("archlike.iso")).unwrap());
         assert_eq!(
             info,
             CopyModeInfo {
@@ -537,17 +534,17 @@ mod tests {
 
     #[test]
     fn explains_why_other_images_are_not_supported() {
-        let windows = analyze(&fixture_path("windows-like.iso"));
+        let windows = analyze(&mut File::open(fixture_path("windows-like.iso")).unwrap());
         assert!(!windows.supported);
         assert!(windows.reason.unwrap().contains("Windows"));
 
-        let no_loader = analyze(&fixture_path("plain.iso"));
+        let no_loader = analyze(&mut File::open(fixture_path("plain.iso")).unwrap());
         assert!(no_loader.reason.unwrap().contains("UEFI"));
 
         let not_iso =
             std::env::temp_dir().join(format!("moondisk-not-iso-{}.img", std::process::id()));
         std::fs::write(&not_iso, vec![0u8; 100_000]).unwrap();
-        let raw = analyze(&not_iso);
+        let raw = analyze(&mut File::open(&not_iso).unwrap());
         std::fs::remove_file(&not_iso).unwrap();
         assert!(raw.reason.unwrap().contains("only ISO images"));
     }

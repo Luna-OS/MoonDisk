@@ -1,4 +1,12 @@
 fn main() {
+    // Only the Tauri app needs Tauri's build step; the macOS helper is
+    // built without it.
+    #[cfg(feature = "gui")]
+    gui();
+}
+
+#[cfg(feature = "gui")]
+fn gui() {
     // Every disk/partition write on Windows goes through PowerShell's
     // Storage module (Remove-Partition, Format-Volume, New-Partition, ...),
     // which refuses with a CIM/WMI "access denied" error unless the
