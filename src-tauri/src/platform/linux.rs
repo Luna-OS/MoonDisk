@@ -12,6 +12,17 @@ use std::process::Command;
 
 pub struct LinuxDiskProvider;
 
+/// GPT reserves a secondary header + partition entry array at the very
+/// end of the disk (33 sectors — well under 1 MiB even on 4Kn drives)
+/// that no partition may occupy; `lsblk`'s reported device size doesn't
+/// exclude it. Windows' `New-Partition` rejects a request that reaches
+/// into this region outright (a real report caught that, see
+/// `platform::windows::GPT_BACKUP_RESERVE`) and `parted` on Linux is
+/// subject to the same on-disk constraint, so the trailing free-space
+/// segment is capped here too, for the same reason and by the same
+/// already-MiB-aligned amount.
+const GPT_BACKUP_RESERVE: u64 = 1024 * 1024;
+
 // --- `lsblk -J -b -O` JSON shape (only the fields MoonDisk uses) ---
 
 #[derive(Debug, Deserialize)]
@@ -195,10 +206,15 @@ fn to_disk(dev: LsblkDevice, index: usize, system_source: Option<&str>) -> Disk 
         }));
         cursor = start + size;
     }
-    if cursor < dev.size {
+    let usable_end = if table == PartitionTable::Gpt {
+        dev.size.saturating_sub(GPT_BACKUP_RESERVE)
+    } else {
+        dev.size
+    };
+    if cursor < usable_end {
         layout.push(Segment::Unallocated {
             start: ByteSize(cursor),
-            size: ByteSize(dev.size - cursor),
+            size: ByteSize(usable_end - cursor),
         });
     }
 
@@ -334,6 +350,36 @@ mod tests {
         assert_eq!(extract_partition_number("sda1", "sda"), Some(1));
         assert_eq!(extract_partition_number("nvme0n1p2", "nvme0n1"), Some(2));
         assert_eq!(extract_partition_number("vda3", "vda"), Some(3));
+    }
+
+    #[test]
+    fn caps_trailing_free_space_below_the_gpt_backup_table_on_gpt_disks() {
+        let dev = LsblkDevice {
+            name: "sdz".into(),
+            path: Some("/dev/sdz".into()),
+            size: 100 * 1024 * 1024,
+            dev_type: "disk".into(),
+            pttype: Some("gpt".into()),
+            children: Some(vec![LsblkDevice {
+                name: "sdz1".into(),
+                path: Some("/dev/sdz1".into()),
+                size: 50 * 1024 * 1024,
+                dev_type: "part".into(),
+                ..Default::default()
+            }]),
+            ..Default::default()
+        };
+        let disk = to_disk(dev, 0, None);
+        let trailing = disk.layout.last().expect("expected a trailing segment");
+        let Segment::Unallocated { start, size } = trailing else {
+            panic!("expected the last segment to be unallocated, got {trailing:?}");
+        };
+        let end = start.0 + size.0;
+        assert!(
+            end <= 100 * 1024 * 1024 - GPT_BACKUP_RESERVE,
+            "trailing free space (ending at {end}) must not reach into the GPT backup table \
+             region — a real New-Partition/parted call there fails"
+        );
     }
 
     // Not run in normal `cargo test` (real hardware varies run to run and
