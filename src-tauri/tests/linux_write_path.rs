@@ -241,3 +241,81 @@ fn writes_a_partitioned_image_onto_a_whole_disk() {
 
     let _ = std::fs::remove_file(&image_path);
 }
+
+#[test]
+#[ignore]
+fn erases_a_drive_an_iso_was_written_to() {
+    use moondisk_lib::models::PartitionTable;
+    use std::io::{Seek, SeekFrom, Write};
+
+    let loop_dev = LoopDevice::attach(64, "erase");
+    let dev = loop_dev.path.as_str();
+
+    // What a hybrid Linux ISO (e.g. Arch's) leaves on a stick: an MBR with
+    // the ISO's data partition and a small FAT EFI partition, plus the
+    // ISO9660 volume descriptors at 32 KiB of the whole disk.
+    let status = Command::new("parted")
+        .args(["--script", dev, "mklabel", "msdos"])
+        .args(["mkpart", "primary", "1MiB", "40MiB"])
+        .args(["mkpart", "primary", "fat32", "40MiB", "48MiB"])
+        .status()
+        .unwrap();
+    assert!(status.success());
+    let _ = Command::new("partprobe").arg(dev).status();
+    let status = Command::new("mkfs.vfat")
+        .args(["-n", "ARCHISO_EFI", &format!("{dev}p2")])
+        .output()
+        .unwrap();
+    assert!(status.status.success(), "{status:?}");
+    {
+        let mut disk = std::fs::OpenOptions::new().write(true).open(dev).unwrap();
+        let mut descriptors = vec![0u8; 4096];
+        descriptors[..6].copy_from_slice(b"\x01CD001");
+        descriptors[2048..2054].copy_from_slice(b"\xffCD001");
+        disk.seek(SeekFrom::Start(32 * 1024)).unwrap();
+        disk.write_all(&descriptors).unwrap();
+        disk.sync_all().unwrap();
+    }
+
+    let probe = |dev: &str| {
+        let out = Command::new("blkid")
+            .args(["-p", "-o", "export", dev])
+            .output()
+            .unwrap();
+        String::from_utf8_lossy(&out.stdout).into_owned()
+    };
+    assert!(
+        probe(dev).contains("TYPE=iso9660"),
+        "test setup: {}",
+        probe(dev)
+    );
+
+    let provider = LinuxDiskProvider;
+    let disk_id = DiskId::from(loop_dev.path.clone());
+    assert_eq!(provider.disk(&disk_id).unwrap().partitions().count(), 2);
+
+    let erase = OperationRequest::EraseDisk {
+        disk: disk_id.clone(),
+        filesystem: FileSystem::ExFat,
+        label: Some("USB".into()),
+    };
+    LinuxDiskExecutor
+        .execute(&erase, Confirmation { confirmed: true })
+        .expect("erase should succeed");
+
+    let disk = provider.disk(&disk_id).unwrap();
+    assert_eq!(disk.table, PartitionTable::Mbr);
+    let parts: Vec<_> = disk.partitions().collect();
+    assert_eq!(parts.len(), 1, "one partition over the whole drive");
+    assert_eq!(parts[0].start, mib(1));
+    assert!(parts[0].size.0 > 60 * 1024 * 1024);
+    assert_eq!(parts[0].fs, FileSystem::ExFat);
+    assert_eq!(parts[0].label.as_deref(), Some("USB"));
+
+    let after = probe(dev);
+    assert!(
+        !after.contains("iso9660"),
+        "the ISO signature must be gone: {after}"
+    );
+    println!("erased {} into one exFAT partition", loop_dev.path);
+}

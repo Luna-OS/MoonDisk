@@ -7,6 +7,7 @@ import { diskModel } from "@/lib/segments";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { MoonPhase } from "@/components/MoonPhase";
 import { AlertIcon, DiscIcon, UsbIcon } from "@/components/icons";
+import { DrivePicker, ResultView, Step, type Result } from "@/components/UsbParts";
 
 const PHASE_LABELS: Record<FlashPhase, string> = {
   preparing: "Preparing the drive",
@@ -14,8 +15,6 @@ const PHASE_LABELS: Record<FlashPhase, string> = {
   verifying: "Verifying",
   finishing: "Finishing",
 };
-
-type Result = { kind: "done" | "cancelled" | "error"; text: string };
 
 function timeLeft(p: FlashProgress): string | null {
   if (p.bytesPerSecond <= 0) return null;
@@ -28,11 +27,13 @@ export function ImageWriter({
   disks,
   loading,
   onFinished,
+  onRunningChange,
 }: {
   disks: Disk[];
   loading: boolean;
   /** Called after every write attempt, so the disk list can be reloaded. */
   onFinished: () => void;
+  onRunningChange: (running: boolean) => void;
 }) {
   const [image, setImage] = useState<ImageInfo | null>(null);
   const [picking, setPicking] = useState(false);
@@ -70,6 +71,7 @@ export function ImageWriter({
     setConfirming(false);
     const target = disk.displayName;
     setJob({ imageName: image.name, diskName: target });
+    onRunningChange(true);
     setProgress(null);
     setCancelling(false);
     setResult(null);
@@ -79,6 +81,7 @@ export function ImageWriter({
       await flashImage({ imagePath: image.path, diskId: disk.id, verify });
       setResult({
         kind: "done",
+        title: "All done",
         text: `${image.name} was written to ${target}${verify ? " and verified" : ""}. You can remove the drive now.`,
       });
     } catch (e) {
@@ -87,13 +90,15 @@ export function ImageWriter({
         message === "cancelled"
           ? {
               kind: "cancelled",
-              text: `${target} now only holds part of the image. Write it again, or format the drive in the Partitions tab.`,
+              title: "Cancelled",
+              text: `${target} now only holds part of the image. Write it again, or restore the drive.`,
             }
-          : { kind: "error", text: message },
+          : { kind: "error", title: "Writing failed", text: message },
       );
     } finally {
       unlisten?.();
       setJob(null);
+      onRunningChange(false);
       onFinished();
     }
   }
@@ -120,19 +125,7 @@ export function ImageWriter({
     );
 
   return (
-    <section aria-label="USB writer" className="md-glass flex flex-col gap-6 p-5">
-      <div className="flex items-center gap-4">
-        <span className="flex size-14 shrink-0 items-center justify-center rounded-full bg-lavender-400/10 text-lavender-300 ring-1 ring-lavender-400/25">
-          <UsbIcon size={26} />
-        </span>
-        <div className="min-w-0">
-          <h2 className="text-xl font-semibold">Write an image to a USB drive</h2>
-          <p className="text-sm text-(--md-color-text-muted)">
-            Turn an ISO or IMG file — a Linux installer, for example — into a bootable USB stick.
-          </p>
-        </div>
-      </div>
-
+    <>
       {job ? (
         <ProgressView
           progress={progress}
@@ -143,7 +136,18 @@ export function ImageWriter({
           onCancel={() => void cancel()}
         />
       ) : result ? (
-        <ResultView result={result} onBack={() => setResult(null)} />
+        <ResultView
+          result={result}
+          note={
+            <>
+              Your computer usually can't read a bootable drive's system partition, so the drive may
+              look mostly empty or unallocated now (e.g. in Disk Management) — that's expected. To
+              use it as a normal USB stick again, switch to <strong>Restore</strong> above.
+            </>
+          }
+          backLabel="Write another"
+          onBack={() => setResult(null)}
+        />
       ) : (
         <div className="grid gap-4 lg:grid-cols-3">
           <Step n={1} title="Image">
@@ -197,25 +201,14 @@ export function ImageWriter({
           </Step>
 
           <Step n={2} title="USB drive">
-            {usbDisks.length === 0 ? (
-              <p className="text-sm text-(--md-color-text-muted)">
-                {loading
-                  ? "Looking for drives …"
-                  : "No USB drive found. Plug one in and press Refresh."}
-              </p>
-            ) : (
-              <div role="radiogroup" aria-label="USB drive" className="flex flex-col gap-2">
-                {usbDisks.map((d) => (
-                  <DriveOption
-                    key={d.id}
-                    disk={d}
-                    problem={unsuitableReason(d, image)}
-                    selected={d.id === diskId}
-                    onSelect={() => setDiskId(d.id)}
-                  />
-                ))}
-              </div>
-            )}
+            <DrivePicker
+              name="write-drive"
+              disks={usbDisks}
+              loading={loading}
+              selectedId={diskId}
+              problem={(d) => unsuitableReason(d, image)}
+              onSelect={setDiskId}
+            />
           </Step>
 
           <Step n={3} title="Write">
@@ -261,68 +254,7 @@ export function ImageWriter({
         onCancel={() => setConfirming(false)}
         onConfirm={() => void write()}
       />
-    </section>
-  );
-}
-
-function Step({ n, title, children }: { n: number; title: string; children: ReactNode }) {
-  return (
-    <div className="md-inset flex min-w-0 flex-col gap-3 p-4">
-      <h3 className="md-eyebrow flex items-center gap-2">
-        <span className="flex size-5 items-center justify-center rounded-full bg-lavender-400/15 text-[0.65rem] text-lavender-300">
-          {n}
-        </span>
-        {title}
-      </h3>
-      {children}
-    </div>
-  );
-}
-
-function DriveOption({
-  disk,
-  problem,
-  selected,
-  onSelect,
-}: {
-  disk: Disk;
-  problem: string | null;
-  selected: boolean;
-  onSelect: () => void;
-}) {
-  return (
-    <label
-      className={`flex items-center gap-3 rounded-xl border p-3 transition-colors duration-200 ${
-        problem
-          ? "cursor-not-allowed border-lavender-400/10 opacity-50"
-          : selected
-            ? "cursor-pointer border-lavender-300/60 bg-lavender-400/8"
-            : "cursor-pointer border-lavender-400/15 hover:border-lavender-400/35"
-      }`}
-    >
-      <input
-        type="radio"
-        name="usb-drive"
-        value={disk.id}
-        checked={selected}
-        disabled={problem !== null}
-        onChange={onSelect}
-        className="size-4 accent-lavender-400"
-      />
-      <span className="min-w-0 flex-1">
-        <span className="flex items-baseline justify-between gap-2">
-          <span className="font-medium">{disk.displayName}</span>
-          <span className="text-xs text-(--md-color-text-muted) tabular-nums">
-            {formatBytes(disk.size)}
-          </span>
-        </span>
-        <span className="block truncate text-xs text-(--md-color-text-muted)">
-          {diskModel(disk)}
-        </span>
-      </span>
-      {disk.isSystemDisk && <span className="md-chip md-chip-warning">System</span>}
-      {problem && <span className="md-chip md-chip-warning">{problem}</span>}
-    </label>
+    </>
   );
 }
 
@@ -394,50 +326,6 @@ function ProgressView({
         className="md-btn md-btn-ghost"
       >
         {cancelling ? "Cancelling …" : "Cancel"}
-      </button>
-    </div>
-  );
-}
-
-const RESULT_TITLES = {
-  done: "All done",
-  cancelled: "Cancelled",
-  error: "Writing failed",
-};
-
-function ResultView({ result, onBack }: { result: Result; onBack: () => void }) {
-  return (
-    <div className="flex flex-col items-center gap-4 py-6 text-center">
-      {result.kind === "done" ? (
-        <MoonPhase fraction={1} size={96} />
-      ) : (
-        <span
-          className={`flex size-16 items-center justify-center rounded-full ring-1 ${
-            result.kind === "error"
-              ? "bg-error-500/15 text-[#f28b92] ring-error-500/40"
-              : "bg-warning-400/10 text-warning-400 ring-warning-400/35"
-          }`}
-        >
-          <AlertIcon />
-        </span>
-      )}
-      <h3 className="text-lg font-semibold">{RESULT_TITLES[result.kind]}</h3>
-      <p
-        role={result.kind === "error" ? "alert" : "status"}
-        className="max-w-md text-sm break-words text-(--md-color-text-muted)"
-      >
-        {result.text}
-      </p>
-      {result.kind === "done" && (
-        <p className="md-inset max-w-md p-3 text-xs leading-relaxed text-(--md-color-text-muted)">
-          Your computer usually can't read a bootable drive's system partition, so the drive may
-          look mostly empty or unallocated now (e.g. in Disk Management) — that's expected. To use
-          it as a normal USB stick again, delete its partitions in the Partitions tab and create a
-          new one.
-        </p>
-      )}
-      <button onClick={onBack} className="md-btn md-btn-ghost">
-        {result.kind === "done" ? "Write another" : "Back"}
       </button>
     </div>
   );

@@ -24,6 +24,8 @@ pub enum ValidationError {
     InvalidLabel,
     #[error("the drive letter must be a single letter A-Z")]
     InvalidDriveLetter,
+    #[error("the running system is on this disk, so it can't be erased")]
+    SystemDisk,
 }
 
 const ALIGNMENT: u64 = 1024 * 1024; // 1 MiB, see docs/supported-operations.md §4
@@ -110,6 +112,22 @@ pub fn validate(disk: &Disk, req: &OperationRequest) -> Result<(), ValidationErr
             find_partition(disk, partition)?;
             if !drive_letter.is_ascii_alphabetic() {
                 return Err(ValidationError::InvalidDriveLetter);
+            }
+            Ok(())
+        }
+        OperationRequest::EraseDisk {
+            filesystem, label, ..
+        } => {
+            // Erasing the disk the OS runs from would fail half-way and
+            // leave the machine unbootable.
+            if disk.is_system_disk {
+                return Err(ValidationError::SystemDisk);
+            }
+            if !filesystem.can_format() {
+                return Err(ValidationError::FilesystemUnsupported);
+            }
+            if let Some(l) = label {
+                validate_label(l)?;
             }
             Ok(())
         }
@@ -327,5 +345,38 @@ mod tests {
             label: "".into(),
         };
         assert_eq!(validate(&disk, &req), Err(ValidationError::InvalidLabel));
+    }
+
+    fn erase(disk: &Disk, filesystem: FileSystem) -> OperationRequest {
+        OperationRequest::EraseDisk {
+            disk: disk.id.clone(),
+            filesystem,
+            label: Some("USB".into()),
+        }
+    }
+
+    #[test]
+    fn erases_a_disk_that_is_not_the_system_disk() {
+        let disk = sample_disk();
+        assert_eq!(validate(&disk, &erase(&disk, FileSystem::ExFat)), Ok(()));
+    }
+
+    #[test]
+    fn refuses_to_erase_the_system_disk() {
+        let mut disk = sample_disk();
+        disk.is_system_disk = true;
+        assert_eq!(
+            validate(&disk, &erase(&disk, FileSystem::ExFat)),
+            Err(ValidationError::SystemDisk)
+        );
+    }
+
+    #[test]
+    fn refuses_to_erase_to_an_unknown_file_system() {
+        let disk = sample_disk();
+        assert_eq!(
+            validate(&disk, &erase(&disk, FileSystem::Unknown)),
+            Err(ValidationError::FilesystemUnsupported)
+        );
     }
 }

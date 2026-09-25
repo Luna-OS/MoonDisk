@@ -42,6 +42,14 @@ pub enum OperationRequest {
         partition: PartitionId,
         drive_letter: char,
     },
+    /// Erases the whole disk and leaves one partition spanning all of it —
+    /// e.g. to turn a USB stick an image was written to back into a normal
+    /// drive.
+    EraseDisk {
+        disk: DiskId,
+        filesystem: FileSystem,
+        label: Option<String>,
+    },
 }
 
 impl OperationRequest {
@@ -52,7 +60,8 @@ impl OperationRequest {
     /// actually looking the partition up inside the named disk.
     pub fn disk_id(&self) -> DiskId {
         match self {
-            OperationRequest::CreatePartition { disk, .. } => disk.clone(),
+            OperationRequest::CreatePartition { disk, .. }
+            | OperationRequest::EraseDisk { disk, .. } => disk.clone(),
             OperationRequest::DeletePartition { partition }
             | OperationRequest::FormatPartition { partition, .. }
             | OperationRequest::SetLabel { partition, .. }
@@ -67,6 +76,7 @@ impl OperationRequest {
             OperationRequest::FormatPartition { .. } => OperationKind::Format,
             OperationRequest::SetLabel { .. } => OperationKind::SetLabel,
             OperationRequest::SetDriveLetter { .. } => OperationKind::SetDriveLetter,
+            OperationRequest::EraseDisk { .. } => OperationKind::EraseDisk,
         }
     }
 
@@ -76,9 +86,9 @@ impl OperationRequest {
                 RiskLevel::Low
             }
             OperationRequest::CreatePartition { .. } => RiskLevel::Medium,
-            OperationRequest::DeletePartition { .. } | OperationRequest::FormatPartition { .. } => {
-                RiskLevel::Critical
-            }
+            OperationRequest::DeletePartition { .. }
+            | OperationRequest::FormatPartition { .. }
+            | OperationRequest::EraseDisk { .. } => RiskLevel::Critical,
         }
     }
 }
@@ -97,6 +107,7 @@ pub enum OperationKind {
     Format,
     SetLabel,
     SetDriveLetter,
+    EraseDisk,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
@@ -141,5 +152,19 @@ mod tests {
                 ..
             }
         ));
+
+        let erase: OperationRequest = serde_json::from_str(
+            r#"{"type":"eraseDisk","disk":"/dev/sdb","filesystem":"exFat","label":"USB"}"#,
+        )
+        .unwrap();
+        assert!(matches!(
+            erase,
+            OperationRequest::EraseDisk {
+                filesystem: FileSystem::ExFat,
+                ..
+            }
+        ));
+        assert_eq!(erase.risk(), RiskLevel::Critical);
+        assert_eq!(erase.disk_id(), DiskId::from("/dev/sdb"));
     }
 }

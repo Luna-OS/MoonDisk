@@ -101,7 +101,9 @@ export type OperationRequest =
   | { type: "deletePartition"; partition: string }
   | { type: "formatPartition"; partition: string; filesystem: FileSystem; label: string | null }
   | { type: "setLabel"; partition: string; label: string }
-  | { type: "setDriveLetter"; partition: string; driveLetter: string };
+  | { type: "setDriveLetter"; partition: string; driveLetter: string }
+  /** Erases the whole disk and leaves one partition over all of it. */
+  | { type: "eraseDisk"; disk: string; filesystem: FileSystem; label: string | null };
 
 export type RiskLevel = "low" | "medium" | "high" | "critical";
 
@@ -114,6 +116,7 @@ export function operationRisk(req: OperationRequest): RiskLevel {
       return "medium";
     case "deletePartition":
     case "formatPartition":
+    case "eraseDisk":
       return "critical";
   }
 }

@@ -58,8 +58,8 @@ export const TrashIcon = () => (
   </Svg>
 );
 
-export const EraseIcon = () => (
-  <Svg>
+export const EraseIcon = ({ size = 16 }: { size?: number }) => (
+  <Svg size={size}>
     <path d="m7 21-4-4 11-11 7 7-7 7" />
     <path d="M22 21H7M14 6l4 4" />
   </Svg>

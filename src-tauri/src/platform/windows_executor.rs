@@ -17,6 +17,7 @@ const DELETE_PARTITION_SCRIPT: &str = include_str!("windows_scripts/delete_parti
 const FORMAT_PARTITION_SCRIPT: &str = include_str!("windows_scripts/format_partition.ps1");
 const SET_LABEL_SCRIPT: &str = include_str!("windows_scripts/set_label.ps1");
 const SET_DRIVE_LETTER_SCRIPT: &str = include_str!("windows_scripts/set_drive_letter.ps1");
+const ERASE_DISK_SCRIPT: &str = include_str!("windows_scripts/erase_disk.ps1");
 
 pub struct WindowsDiskExecutor;
 
@@ -147,6 +148,24 @@ impl DiskOperationExecutor for WindowsDiskExecutor {
                     ],
                 )
                 .map_err(|e| ExecutionError::Failed(e.to_string()))?;
+            }
+            OperationRequest::EraseDisk {
+                filesystem, label, ..
+            } => {
+                let fs_name = windows_fs_name(*filesystem)?;
+                let mut args = vec![
+                    "-DiskNumber".to_string(),
+                    disk_number.to_string(),
+                    "-FileSystem".to_string(),
+                    fs_name.to_string(),
+                ];
+                if let Some(l) = label {
+                    args.push("-Label".to_string());
+                    args.push(l.clone());
+                }
+                let arg_refs: Vec<&str> = args.iter().map(String::as_str).collect();
+                run_powershell_script(ERASE_DISK_SCRIPT, &arg_refs)
+                    .map_err(|e| ExecutionError::Failed(e.to_string()))?;
             }
         }
         Ok(())

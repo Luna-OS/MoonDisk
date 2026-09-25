@@ -1,7 +1,7 @@
 {
   "name": "moondisk",
   "private": true,
-  "version": "0.2.14",
+  "version": "0.2.15",
   "description": "MoonDisk – your disks, safely under the moon.",
   "license": "GPL-3.0-or-later",
   "type": "module",

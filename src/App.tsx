@@ -24,7 +24,7 @@ import { PartitionBar } from "@/components/PartitionBar";
 import { PartitionActions } from "@/components/PartitionActions";
 import { FreeSpaceActions } from "@/components/FreeSpaceActions";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
-import { ImageWriter } from "@/components/ImageWriter";
+import { UsbTab } from "@/components/UsbTab";
 import { MoonPhase } from "@/components/MoonPhase";
 import { Sky } from "@/components/Sky";
 import {
@@ -194,7 +194,12 @@ export default function App() {
         <Tabs tab={tab} onChange={setTab} />
 
         <div id="panel-usb" role="tabpanel" aria-labelledby="tab-usb" hidden={tab !== "usb"}>
-          <ImageWriter disks={disks} loading={loading} onFinished={() => void refresh()} />
+          <UsbTab
+            disks={disks}
+            loading={loading}
+            platform={platform}
+            onFinished={() => void refresh()}
+          />
         </div>
 
         <div

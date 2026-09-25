@@ -158,7 +158,7 @@ describe("App", () => {
     fireEvent.click(await screen.findByText("Lunaris NV-1000"));
     fireEvent.click(await screen.findByRole("button", { name: /Unallocated/ }));
 
-    const fs = screen.getByLabelText("File system");
+    const fs = screen.getByRole("combobox", { name: "File system" });
     expect(within(fs).getByRole("option", { name: "APFS" })).toBeInTheDocument();
     expect(within(fs).getByRole("option", { name: "Mac OS Extended" })).toBeInTheDocument();
     expect(within(fs).queryByRole("option", { name: "NTFS" })).not.toBeInTheDocument();
@@ -216,6 +216,29 @@ describe("App", () => {
       imagePath: "/home/me/linux.iso",
       diskId: "mock-usb-1",
       verify: true,
+      confirmed: true,
+    });
+  });
+
+  it("restores a USB drive to one empty partition", async () => {
+    mockBackend([sampleDisk, usbDisk], undefined, {
+      execute_operation: () => Promise.resolve({ applied: true }),
+    });
+    await openUsbWriter();
+
+    fireEvent.click(screen.getByRole("button", { name: "Restore" }));
+    expect(screen.getByRole("heading", { name: "Restore a USB drive" })).toBeInTheDocument();
+    // Only USB drives, and nothing happens before one is chosen.
+    expect(screen.queryByRole("radio", { name: /Disk 0/ })).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Restore drive" })).toBeDisabled();
+
+    fireEvent.click(screen.getByRole("radio", { name: /Disk 1/ }));
+    fireEvent.click(screen.getByRole("button", { name: "Restore drive" }));
+    fireEvent.click(screen.getByRole("button", { name: "Erase and restore" }));
+
+    expect(await screen.findByText("Drive restored")).toBeInTheDocument();
+    expect(mockedInvoke).toHaveBeenCalledWith("execute_operation", {
+      request: { type: "eraseDisk", disk: "mock-usb-1", filesystem: "exFat", label: "USB" },
       confirmed: true,
     });
   });

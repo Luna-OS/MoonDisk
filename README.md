@@ -10,7 +10,7 @@ MoonDisk is a modern, open-source partition manager for Windows, macOS and Linux
 - Create partitions with a chosen size, file system, label and (on Windows) drive letter
 - Format and delete partitions, change labels and drive letters
 - USB writer: write an ISO/IMG file onto a USB stick (e.g. a Linux installer), with
-  verification and live progress
+  verification and live progress — and restore such a stick to a normal, empty drive afterwards
 - Confirmation dialog for destructive actions (delete/format/write image)
 
 The USB writer copies the image byte for byte, like balenaEtcher or Rufus' DD mode. That works

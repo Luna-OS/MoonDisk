@@ -82,6 +82,9 @@ impl DiskOperationExecutor for LinuxDiskExecutor {
             OperationRequest::SetDriveLetter { .. } => Err(ExecutionError::NotImplemented(
                 "drive letters do not exist on Linux".into(),
             )),
+            OperationRequest::EraseDisk {
+                filesystem, label, ..
+            } => erase_disk(&disk, *filesystem, label.as_deref()),
         }
     }
 }
@@ -173,6 +176,41 @@ fn create_partition(
     ]))?;
     rescan_partition_table(disk_path);
     Ok(())
+}
+
+/// parted's name for the MBR partition type of `fs`. Windows only mounts
+/// partitions whose type it knows, so an exFAT/NTFS/FAT32 partition needs
+/// the matching type, not parted's default "Linux" one.
+fn mbr_partition_type(fs: FileSystem) -> Result<&'static str, ExecutionError> {
+    match fs {
+        FileSystem::Fat32 => Ok("fat32"),
+        FileSystem::ExFat | FileSystem::Ntfs => Ok("ntfs"),
+        FileSystem::Ext2 | FileSystem::Ext3 | FileSystem::Ext4 => Ok("ext4"),
+        FileSystem::Btrfs => Ok("btrfs"),
+        FileSystem::Xfs => Ok("xfs"),
+        FileSystem::LinuxSwap => Ok("linux-swap"),
+        _ => Err(ExecutionError::NotImplemented(
+            "Linux cannot create this file system".into(),
+        )),
+    }
+}
+
+/// Wipes every partition table and file system signature from the disk
+/// (a written ISO also leaves an ISO9660 signature behind), then gives it
+/// an MBR table — what every OS and firmware reads on a USB stick — with
+/// one partition over the whole disk.
+fn erase_disk(disk: &Disk, fs: FileSystem, label: Option<&str>) -> Result<(), ExecutionError> {
+    // Checked before anything is wiped.
+    let part_type = mbr_partition_type(fs)?;
+    let path = disk.id.0.as_str();
+
+    prepare_raw_write(disk)?;
+    run(Command::new("wipefs").args(["--all", "--force", path]))?;
+    run(Command::new("parted").args([
+        "--script", path, "mklabel", "msdos", "mkpart", "primary", part_type, "1MiB", "100%",
+    ]))?;
+    rescan_partition_table(path);
+    format_partition(&partition_device_path(path, 1), fs, label)
 }
 
 fn delete_partition(disk_path: &str, number: u32) -> Result<(), ExecutionError> {

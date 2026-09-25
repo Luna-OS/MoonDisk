@@ -168,6 +168,23 @@ pub(crate) fn diskutil_args(
                 label.clone(),
             ]
         }
+        OperationRequest::EraseDisk {
+            filesystem, label, ..
+        } => {
+            // MBR is what every OS and firmware reads on a USB stick; APFS
+            // and Mac OS Extended need GPT.
+            let scheme = match filesystem {
+                FileSystem::Apfs | FileSystem::HfsPlus => "GPT",
+                _ => "MBR",
+            };
+            vec![
+                "eraseDisk".into(),
+                diskutil_format(*filesystem)?.into(),
+                volume_name(*filesystem, label.as_deref()),
+                scheme.into(),
+                disk.id.0.clone(),
+            ]
+        }
         OperationRequest::SetDriveLetter { .. } => {
             return Err(ExecutionError::NotImplemented(
                 "drive letters only exist on Windows".into(),
@@ -461,6 +478,25 @@ mod tests {
         assert_eq!(
             diskutil_args(&d, &rename).unwrap(),
             ["renameVolume", "/dev/disk4s2", "Backup"]
+        );
+    }
+
+    #[test]
+    fn erases_a_whole_disk() {
+        let id = DiskId::from("/dev/disk4");
+        let d = disk(vec![partition(&id, 2, MIB, 200 * MIB)]);
+        let erase = |fs| OperationRequest::EraseDisk {
+            disk: id.clone(),
+            filesystem: fs,
+            label: Some("usb".into()),
+        };
+        assert_eq!(
+            diskutil_args(&d, &erase(FileSystem::Fat32)).unwrap(),
+            ["eraseDisk", "FAT32", "USB", "MBR", "/dev/disk4"]
+        );
+        assert_eq!(
+            diskutil_args(&d, &erase(FileSystem::Apfs)).unwrap(),
+            ["eraseDisk", "APFS", "usb", "GPT", "/dev/disk4"]
         );
     }
 
