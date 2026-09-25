@@ -139,7 +139,14 @@ export interface ImageInfo {
    * files do; Windows installer ISOs don't and won't boot when written
    * raw. */
   hasBootSector: boolean;
+  /** Whether the image's files can be copied onto a FAT32 drive (Rufus'
+   * "ISO mode"), and if not, why. */
+  copyMode: { supported: boolean; reason: string | null; label: string | null };
 }
+
+/** "copy": the image's files onto a readable FAT32 drive that boots on
+ * UEFI PCs. "raw": byte for byte, like dd. */
+export type WriteMode = "copy" | "raw";
 
 export type FlashPhase = "preparing" | "writing" | "verifying" | "finishing";
 

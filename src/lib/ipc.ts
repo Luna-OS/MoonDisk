@@ -6,7 +6,14 @@
  */
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
-import type { AppInfo, Disk, FlashProgress, ImageInfo, OperationRequest } from "@/types/models";
+import type {
+  AppInfo,
+  Disk,
+  FlashProgress,
+  ImageInfo,
+  OperationRequest,
+  WriteMode,
+} from "@/types/models";
 
 export function getAppInfo(): Promise<AppInfo> {
   return invoke("app_info");
@@ -44,6 +51,7 @@ export function selectImageFile(): Promise<ImageInfo | null> {
 export interface FlashImageArgs {
   imagePath: string;
   diskId: string;
+  mode: WriteMode;
   verify: boolean;
 }
 

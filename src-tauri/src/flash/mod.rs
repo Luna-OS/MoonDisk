@@ -7,9 +7,13 @@
 //! the new partition table afterwards are platform-specific and live in
 //! the Linux/Windows executor modules.
 
+pub mod copy;
+pub mod fat32;
+pub mod iso9660;
+
 use crate::models::{BusType, Disk};
 use crate::operations::ExecutionError;
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use std::fs::File;
 #[cfg(not(target_os = "macos"))]
 use std::fs::OpenOptions;
@@ -99,6 +103,27 @@ pub struct ImageInfo {
     /// and raw `.img` disk images have one; Windows installer ISOs don't,
     /// and won't boot when written raw.
     pub has_boot_sector: bool,
+    /// Whether the image can be written in file-copy mode.
+    pub copy_mode: copy::CopyModeInfo,
+}
+
+/// How an image goes onto the drive.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum WriteMode {
+    /// Byte for byte, like `dd`: boots everywhere the image does, but the
+    /// OS usually can't read the drive afterwards.
+    Raw,
+    /// The image's files onto a FAT32 partition, like Rufus' ISO mode:
+    /// readable everywhere, boots on UEFI PCs.
+    Copy,
+}
+
+#[cfg(test)]
+impl RawTarget for std::io::Cursor<Vec<u8>> {
+    fn flush_to_device(&mut self) -> io::Result<()> {
+        Ok(())
+    }
 }
 
 pub fn image_info(path: &Path) -> io::Result<ImageInfo> {
@@ -114,6 +139,7 @@ pub fn image_info(path: &Path) -> io::Result<ImageInfo> {
             .unwrap_or_default(),
         size: crate::models::ByteSize(size),
         has_boot_sector,
+        copy_mode: copy::analyze(path),
     })
 }
 
@@ -231,6 +257,20 @@ pub fn verify_image<S: Read, T: RawTarget>(
 pub fn run(
     image_path: &Path,
     disk: &Disk,
+    mode: WriteMode,
+    verify: bool,
+    cancel: &AtomicBool,
+    report: impl FnMut(Phase, u64, u64),
+) -> Result<(), FlashError> {
+    match mode {
+        WriteMode::Raw => run_raw(image_path, disk, verify, cancel, report),
+        WriteMode::Copy => copy::run(image_path, disk, verify, cancel, report),
+    }
+}
+
+fn run_raw(
+    image_path: &Path,
+    disk: &Disk,
     verify: bool,
     cancel: &AtomicBool,
     mut report: impl FnMut(Phase, u64, u64),
@@ -276,12 +316,6 @@ mod tests {
     use super::*;
     use crate::models::*;
     use std::io::Cursor;
-
-    impl RawTarget for Cursor<Vec<u8>> {
-        fn flush_to_device(&mut self) -> io::Result<()> {
-            Ok(())
-        }
-    }
 
     fn pattern(len: usize) -> Vec<u8> {
         (0..len).map(|i| (i * 31 % 251) as u8).collect()

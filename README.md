@@ -13,9 +13,18 @@ MoonDisk is a modern, open-source partition manager for Windows, macOS and Linux
   verification and live progress — and restore such a stick to a normal, empty drive afterwards
 - Confirmation dialog for destructive actions (delete/format/write image)
 
-The USB writer copies the image byte for byte, like balenaEtcher or Rufus' DD mode. That works
-for Linux ISOs and `.img` files; Windows installer ISOs need Microsoft's Media Creation Tool
-instead — MoonDisk warns when an image won't boot this way.
+The USB writer has two modes:
+
+- **Copy files** (default, like Rufus' ISO mode): the stick gets one FAT32 partition with the
+  image's files. Windows, macOS and Linux can open it, and it boots on UEFI PCs through the
+  image's own EFI boot loader. When the image's label is too long for FAT32, the boot
+  configuration is patched to the shortened label. Needs an ISO with a UEFI boot loader and no
+  file over 4 GB — MoonDisk says so when an image doesn't qualify.
+- **Raw image** (like balenaEtcher or Rufus' DD mode): the image byte for byte. Also boots on old
+  BIOS-only PCs, but the stick looks empty to Windows afterwards.
+
+Windows installer ISOs aren't supported yet in either mode; use Microsoft's Media Creation Tool
+for them.
 
 ## Installation
 

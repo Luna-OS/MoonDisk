@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { fireEvent, render, screen, within } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { invoke } from "@tauri-apps/api/core";
 import App from "./App";
 import type { AppInfo, Disk, ImageInfo } from "@/types/models";
@@ -65,9 +65,20 @@ function image(overrides: Partial<ImageInfo> = {}): ImageInfo {
     name: "linux.iso",
     size: (2n * GIB).toString(),
     hasBootSector: true,
+    copyMode: { supported: true, reason: null, label: "ARCH_202409" },
     ...overrides,
   };
 }
+
+const WINDOWS_ISO = image({
+  name: "Win11.iso",
+  hasBootSector: false,
+  copyMode: {
+    supported: false,
+    reason: "Windows installer images can't be copied file by file yet",
+    label: null,
+  },
+});
 
 function mockBackend(
   disks: Disk[],
@@ -177,7 +188,7 @@ describe("App", () => {
 
   it("warns when an image has no boot sector", async () => {
     mockBackend([usbDisk], undefined, {
-      select_image_file: () => Promise.resolve(image({ name: "Win11.iso", hasBootSector: false })),
+      select_image_file: () => Promise.resolve(WINDOWS_ISO),
     });
     await openUsbWriter();
 
@@ -215,6 +226,7 @@ describe("App", () => {
     expect(mockedInvoke).toHaveBeenCalledWith("flash_image", {
       imagePath: "/home/me/linux.iso",
       diskId: "mock-usb-1",
+      mode: "copy",
       verify: true,
       confirmed: true,
     });
@@ -241,5 +253,24 @@ describe("App", () => {
       request: { type: "eraseDisk", disk: "mock-usb-1", filesystem: "exFat", label: "USB" },
       confirmed: true,
     });
+  });
+
+  it("copies files like Rufus by default and says when it can't", async () => {
+    let pick = image();
+    mockBackend([usbDisk], undefined, {
+      select_image_file: () => Promise.resolve(pick),
+    });
+    await openUsbWriter();
+
+    fireEvent.click(screen.getByRole("button", { name: "Choose image" }));
+    const copy = await screen.findByRole("radio", { name: /Copy files/ });
+    await waitFor(() => expect(copy).toBeChecked());
+    expect(screen.getByRole("radio", { name: /Raw image/ })).not.toBeChecked();
+
+    pick = WINDOWS_ISO;
+    fireEvent.click(screen.getByRole("button", { name: "Choose another" }));
+    await waitFor(() => expect(screen.getByRole("radio", { name: /Raw image/ })).toBeChecked());
+    expect(screen.getByRole("radio", { name: /Copy files/ })).toBeDisabled();
+    expect(screen.getByText(/Windows installer images can't be copied/)).toBeInTheDocument();
   });
 });

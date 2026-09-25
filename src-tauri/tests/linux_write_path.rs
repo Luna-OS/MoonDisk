@@ -319,3 +319,76 @@ fn erases_a_drive_an_iso_was_written_to() {
     );
     println!("erased {} into one exFAT partition", loop_dev.path);
 }
+
+#[test]
+#[ignore]
+fn copies_an_iso_onto_a_loop_device() {
+    use moondisk_lib::flash::copy::{plan, prepare, write_to};
+    use std::fs::File;
+    use std::sync::atomic::AtomicBool;
+
+    let loop_dev = LoopDevice::attach(200, "copy");
+    let dev = loop_dev.path.clone();
+    let disk_size = 200 * 1024 * 1024;
+
+    let fixture = format!("{}/tests/fixtures/archlike.iso", env!("CARGO_MANIFEST_DIR"));
+    let mut image = File::open(&fixture).unwrap();
+    let prepared = prepare(&mut image).unwrap();
+    let plan = plan(&prepared, disk_size, 512).unwrap();
+    let mut target = std::fs::OpenOptions::new()
+        .read(true)
+        .write(true)
+        .open(&dev)
+        .unwrap();
+    let cancel = AtomicBool::new(false);
+    write_to(
+        &mut image,
+        &prepared,
+        &plan,
+        &mut target,
+        disk_size,
+        true,
+        || {
+            let status = Command::new("blockdev")
+                .args(["--flushbufs", &dev])
+                .status()
+                .unwrap();
+            assert!(status.success());
+            Ok(())
+        },
+        &cancel,
+        &mut |_, _, _| {},
+    )
+    .expect("copy");
+    drop(target);
+    let _ = Command::new("partprobe").arg(&dev).status();
+
+    let probe = |dev: &str| {
+        let out = Command::new("blkid")
+            .args(["-p", "-o", "export", dev])
+            .output()
+            .unwrap();
+        String::from_utf8_lossy(&out.stdout).into_owned()
+    };
+    let part = format!("{dev}p1");
+    let fs = probe(&part);
+    assert!(fs.contains("TYPE=vfat"), "{fs}");
+    assert!(fs.contains("VERSION=FAT32"), "{fs}");
+    assert!(fs.contains("LABEL=ARCH_202409"), "{fs}");
+    assert!(probe(&dev).contains("PTTYPE=dos"));
+
+    let fsck = Command::new("fsck.fat")
+        .args(["-n", "-v", &part])
+        .output()
+        .unwrap();
+    println!("{}", String::from_utf8_lossy(&fsck.stdout));
+    assert!(fsck.status.success(), "{fsck:?}");
+
+    // The provider sees one FAT32 partition, like after Rufus.
+    let disk = LinuxDiskProvider.disk(&DiskId::from(dev.clone())).unwrap();
+    let parts: Vec<_> = disk.partitions().collect();
+    assert_eq!(parts.len(), 1);
+    assert_eq!(parts[0].fs, FileSystem::Fat32);
+    assert_eq!(parts[0].label.as_deref(), Some("ARCH_202409"));
+    println!("copied archlike.iso onto {dev}");
+}

@@ -1,5 +1,5 @@
 import { useState, type ReactNode } from "react";
-import type { Disk, FlashPhase, FlashProgress, ImageInfo } from "@/types/models";
+import type { Disk, FlashPhase, FlashProgress, ImageInfo, WriteMode } from "@/types/models";
 import { cancelFlash, flashImage, onFlashProgress, selectImageFile } from "@/lib/ipc";
 import { formatBytes } from "@/lib/format";
 import { overallFraction, unsuitableReason } from "@/lib/flash";
@@ -39,6 +39,7 @@ export function ImageWriter({
   const [picking, setPicking] = useState(false);
   const [pickError, setPickError] = useState<string | null>(null);
   const [diskId, setDiskId] = useState<string | null>(null);
+  const [mode, setMode] = useState<WriteMode>("copy");
   const [verify, setVerify] = useState(true);
   const [confirming, setConfirming] = useState(false);
   /** Set while a write runs; names are captured up front so a disk list
@@ -58,7 +59,11 @@ export function ImageWriter({
     setPickError(null);
     try {
       const picked = await selectImageFile();
-      if (picked) setImage(picked);
+      if (picked) {
+        setImage(picked);
+        // Like Rufus: copy the files whenever that boots, else write raw.
+        setMode(picked.copyMode.supported ? "copy" : "raw");
+      }
     } catch (e) {
       setPickError(String(e));
     } finally {
@@ -78,7 +83,7 @@ export function ImageWriter({
     let unlisten: (() => void) | null = null;
     try {
       unlisten = await onFlashProgress(setProgress);
-      await flashImage({ imagePath: image.path, diskId: disk.id, verify });
+      await flashImage({ imagePath: image.path, diskId: disk.id, mode, verify });
       setResult({
         kind: "done",
         title: "All done",
@@ -130,6 +135,7 @@ export function ImageWriter({
         <ProgressView
           progress={progress}
           verify={verify}
+          copying={mode === "copy"}
           imageName={job.imageName}
           diskName={job.diskName}
           cancelling={cancelling}
@@ -139,11 +145,21 @@ export function ImageWriter({
         <ResultView
           result={result}
           note={
-            <>
-              Your computer usually can't read a bootable drive's system partition, so the drive may
-              look mostly empty or unallocated now (e.g. in Disk Management) — that's expected. To
-              use it as a normal USB stick again, switch to <strong>Restore</strong> above.
-            </>
+            mode === "copy" ? (
+              <>
+                The drive is now a normal FAT32 drive
+                {image?.copyMode.label ? ` named “${image.copyMode.label}”` : ""} that you can open
+                on any computer. It boots on UEFI PCs — every PC from the last decade; for older
+                BIOS-only PCs, write the image in raw mode instead.
+              </>
+            ) : (
+              <>
+                Your computer usually can't read a bootable drive's system partition, so the drive
+                may look mostly empty or unallocated now (e.g. in Disk Management) — that's
+                expected. To use it as a normal USB stick again, switch to <strong>Restore</strong>{" "}
+                above.
+              </>
+            )
           }
           backLabel="Write another"
           onBack={() => setResult(null)}
@@ -171,7 +187,7 @@ export function ImageWriter({
               </p>
             )}
             {image &&
-              (image.hasBootSector ? (
+              (image.hasBootSector || image.copyMode.supported ? (
                 <span className="md-chip md-chip-mint self-start">Bootable from USB</span>
               ) : (
                 <p className="flex gap-2 rounded-lg bg-warning-400/8 p-3 text-xs leading-relaxed text-warning-400 ring-1 ring-warning-400/30">
@@ -212,6 +228,20 @@ export function ImageWriter({
           </Step>
 
           <Step n={3} title="Write">
+            <div role="radiogroup" aria-label="Write mode" className="flex flex-col gap-2">
+              <ModeOption
+                value="copy"
+                mode={mode}
+                title="Copy files (like Rufus)"
+                disabledReason={image && !image.copyMode.supported ? image.copyMode.reason : null}
+                onSelect={setMode}
+              >
+                A normal FAT32 drive you can open anywhere. Boots on UEFI PCs.
+              </ModeOption>
+              <ModeOption value="raw" mode={mode} title="Raw image (DD)" onSelect={setMode}>
+                Byte-for-byte copy. Also boots old BIOS PCs, but looks empty to Windows.
+              </ModeOption>
+            </div>
             <label className="flex items-center gap-2 text-sm">
               <input
                 type="checkbox"
@@ -246,6 +276,11 @@ export function ImageWriter({
             ? [
                 `Image: ${image.name} (${formatBytes(image.size)})`,
                 `Drive: ${disk.displayName} – ${diskModel(disk)} (${formatBytes(disk.size)})`,
+                `Mode:  ${
+                  mode === "copy"
+                    ? `copy files to FAT32${image.copyMode.label ? ` “${image.copyMode.label}”` : ""}`
+                    : "raw image"
+                }`,
               ].join("\n")
             : ""
         }
@@ -258,9 +293,59 @@ export function ImageWriter({
   );
 }
 
+function ModeOption({
+  value,
+  mode,
+  title,
+  disabledReason = null,
+  onSelect,
+  children,
+}: {
+  value: WriteMode;
+  mode: WriteMode;
+  title: string;
+  disabledReason?: string | null;
+  onSelect: (mode: WriteMode) => void;
+  children: ReactNode;
+}) {
+  const selected = value === mode;
+  const disabled = disabledReason !== null;
+  return (
+    <label
+      className={`flex gap-3 rounded-xl border p-3 transition-colors duration-200 ${
+        disabled
+          ? "cursor-not-allowed border-lavender-400/10"
+          : selected
+            ? "cursor-pointer border-lavender-300/60 bg-lavender-400/8"
+            : "cursor-pointer border-lavender-400/15 hover:border-lavender-400/35"
+      }`}
+    >
+      <input
+        type="radio"
+        name="write-mode"
+        value={value}
+        checked={selected && !disabled}
+        disabled={disabled}
+        onChange={() => onSelect(value)}
+        className="mt-0.5 size-4 shrink-0 accent-lavender-400"
+      />
+      <span className="flex min-w-0 flex-col gap-0.5">
+        <span className={`text-sm font-medium ${disabled ? "opacity-50" : ""}`}>{title}</span>
+        <span className={`text-xs text-(--md-color-text-muted) ${disabled ? "opacity-50" : ""}`}>
+          {children}
+        </span>
+        {disabled && (
+          <span className="text-xs text-warning-400">Not for this image: {disabledReason}.</span>
+        )}
+      </span>
+    </label>
+  );
+}
+
 function ProgressView({
   progress,
   verify,
+  copying,
   imageName,
   diskName,
   cancelling,
@@ -268,6 +353,7 @@ function ProgressView({
 }: {
   progress: FlashProgress | null;
   verify: boolean;
+  copying: boolean;
   imageName: string;
   diskName: string;
   cancelling: boolean;
@@ -285,7 +371,7 @@ function ProgressView({
       <div className="flex flex-col gap-1">
         <p className="text-3xl font-semibold text-lavender-300 tabular-nums">{percent}%</p>
         <p className="text-sm font-medium">
-          {PHASE_LABELS[phase]} …
+          {copying && phase === "writing" ? "Copying files" : PHASE_LABELS[phase]} …
           {verify && moving && (
             <span className="ml-1.5 text-(--md-color-text-muted)">
               (step {phase === "writing" ? 1 : 2} of 2)

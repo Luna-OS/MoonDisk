@@ -16,7 +16,7 @@
 #[cfg(not(any(target_os = "linux", target_os = "windows", target_os = "macos")))]
 compile_error!("MoonDisk only supports Windows, Linux and macOS");
 
-use crate::flash::{FlashError, ImageInfo, Phase};
+use crate::flash::{FlashError, ImageInfo, Phase, WriteMode};
 use crate::models::ByteSize;
 use crate::models::{Disk, DiskId};
 use crate::operations::{
@@ -213,6 +213,7 @@ pub async fn flash_image(
     state: tauri::State<'_, AppState>,
     image_path: String,
     disk_id: String,
+    mode: WriteMode,
     verify: bool,
     confirmed: bool,
 ) -> Result<(), String> {
@@ -237,6 +238,7 @@ pub async fn flash_image(
         crate::flash::run(
             &PathBuf::from(image_path),
             &disk,
+            mode,
             verify,
             &worker.cancel,
             |p, done, total| {

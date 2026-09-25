@@ -1,6 +1,6 @@
 [package]
 name = "moondisk"
-version = "0.2.15"
+version = "0.2.16"
 description = "MoonDisk – your disks, safely under the moon. A local, open-source partition manager."
 authors = ["MoonDisk contributors"]
 license = "GPL-3.0-or-later"
@@ -34,6 +34,11 @@ tauri-plugin-dialog = "2.7.3"
 [target.'cfg(target_os = "macos")'.dependencies]
 plist = "1.10.1"
 libc = "0.2.189"
+
+[dev-dependencies]
+# An independent FAT implementation to read back what the USB writer's
+# FAT32 builder wrote.
+fatfs = "0.3.6"
 
 # The macOS parsers and fd passing are unit-tested on Linux too.
 [target.'cfg(unix)'.dev-dependencies]
